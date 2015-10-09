@@ -1,13 +1,13 @@
 source('~/1000GP/calculatePCA.R')
 source('~/1000GP/associations-copy.R')
 
-chr <- 7
-#subpops <- c("TSI","IBS")
-numRows <- 1000
+chr <- "filtered100"
+numRows <- 40000
 varianceEstimate <- "adjVar" 
 subpops <- c("all","all")
+#subpops <- c("TSI","IBS")
 args<-commandArgs(TRUE)
-correctionMethods <- c("jaccard")
+correctionMethods <- c("subpop","varcov","jaccard")
 if(length(args)!=0){
     chr <- as.numeric(args[1])
     subpops <- c(args[2], args[3])
@@ -17,7 +17,7 @@ if(length(args)!=0){
 }
 sapply(correctionMethods, function(method){
     print(args)
-    runAndPlot(chr=chr,correctMethod=method, ATT=varianceEstimate, subpops=subpops, numRows=numRows)
+    runAndPlot(chr=chr,correctMethod=method, ATT=varianceEstimate, subpops=subpops, numEigenVectors=1, numRows=numRows)
     gc()
 })
 # 
