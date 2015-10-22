@@ -46,8 +46,6 @@ getResultDF <- function(filename, phenotype, numRows, linesAtATime=1000, correct
     con <- file(filename, "rt")
     # fix this to stop at end of file
 
-    # For debugging
-    allAlleles <- c()
     resultMatrix <- t(do.call(cbind, lapply(1:(numRows/linesAtATime), function(i){
         genotypes <- apply(do.call(rbind, strsplit(readLines(con, linesAtATime)," ")), 1,as.numeric)
         alleles <- genotypes[c(T,F),] + genotypes[c(F,T),]
@@ -110,17 +108,17 @@ getResultDF <- function(filename, phenotype, numRows, linesAtATime=1000, correct
         results <- resultsList$rm
         df      <- resultsList$df
         rareobsPValues <- apply(apply(results[rareIndices,], 2, sort, decreasing=TRUE),1,function(x){
-            mean(x)
+            median(x)
 #             -log(1-pchisq(mean(x), 1))
 #             mean(-log(2*pt(abs(x))))
         })
         lowobsPValues <- apply(apply(results[lowIndices,], 2, sort, decreasing=TRUE),1,function(x){
 #             -log(1-pchisq(mean(x), 1))
-            mean(x)
+            median(x)
         })
         commonobsPValues <- apply(apply(results[commonIndices,], 2, sort, decreasing=TRUE),1,function(x){
 #             -log(1-pchisq(mean(x), 1))
-            mean(x)
+            median(x)
         })
         
         rareobsPValues <- data.frame(cbind(rareobsPValues, -log(1:length(rareobsPValues)/length(rareobsPValues))))
@@ -138,7 +136,8 @@ getResultDF <- function(filename, phenotype, numRows, linesAtATime=1000, correct
     uniformResult <- cbind(combinedResultList[[1]], phenotype="Uniform")
     gradualResult <- cbind(combinedResultList[[2]], phenotype="Gradual")
     sharpResult <- cbind(combinedResultList[[3]], phenotype="Sharp")
-    do.call(rbind, list(uniformResult, gradualResult, sharpResult))
+    results <- do.call(rbind, list(uniformResult, gradualResult, sharpResult))
+    results
 }
 
 # Make non-genetic risk
