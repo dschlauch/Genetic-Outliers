@@ -3,3 +3,4 @@ output*/
 data/
 counts*/ 
 *.r
+.Rproj.user
