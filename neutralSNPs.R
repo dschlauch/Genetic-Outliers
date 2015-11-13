@@ -32,15 +32,15 @@ runAlleleFreqSim <- function(populationSize, numGen, numSim, alleleFreq){
 
 populationSize <- 10000
 numGen <- 1000
-numSim <- 1000
+numSim <- 3000
 alleleFreq = .1
 
 
 res <- runAlleleFreqSim(populationSize, numGen, numSim, alleleFreq)
 
-ggplot(data.frame(res), aes(res))+ geom_histogram(binwidth = .01, color="red", fill="blue") +
+ggplot(data.frame(res), aes(res))+ geom_histogram(binwidth = .001, color="red", fill="blue") +
   ggtitle(paste0("Allele frequency for population of ", populationSize, " after ", numGen, " generations (", numSim," simulations)")) + 
   geom_vline(xintercept = alleleFreq) +
-  annotate("text", x=alleleFreq-.001, y=20, label="Starting Allele Frequency", color="red",angle = 90) +
+  annotate("text", x=alleleFreq-.001, y=30, label="Starting Allele Frequency", color="red",angle = -90) +
   xlab("Final allele frequency")
 

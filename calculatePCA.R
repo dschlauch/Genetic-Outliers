@@ -18,11 +18,18 @@ numX1Y1 <- allV
 numX0Y0 <- numLoci - numX1Y0 - numX0Y1 + numX1Y1
 
 alleleProportions <- counts/numLoci
+# 
+# valueX1Y0 <- (1-alleleProportions)%*%t(0-alleleProportions)
+# valueX0Y1 <- (0-alleleProportions)%*%t(1-alleleProportions)
+# valueX1Y1 <- (1-alleleProportions)%*%t(1-alleleProportions)
+# valueX0Y0 <- (0-alleleProportions)%*%t(0-alleleProportions)
 
-valueX1Y0 <- (1-alleleProportions)%*%t(0-alleleProportions)
-valueX0Y1 <- (0-alleleProportions)%*%t(1-alleleProportions)
-valueX1Y1 <- (1-alleleProportions)%*%t(1-alleleProportions)
-valueX0Y0 <- (0-alleleProportions)%*%t(0-alleleProportions)
+# Is this wrong? 11/8/15
+#varcovMatrixHap <- (1/(numLoci-1))*(numX0Y0*valueX0Y0 + numX0Y1*valueX0Y1 + numX1Y0*valueX1Y0 + numX1Y1*valueX1Y1)
 
-varcovMatrixHap <- (1/(numLoci-1))*(numX0Y0*valueX0Y0 + numX0Y1*valueX0Y1 + numX1Y0*valueX1Y0 + numX1Y1*valueX1Y1)
+evX1Y1 <- numLoci*(alleleProportions%*%t(alleleProportions))
+sumPOneMinusP <- numLoci*alleleProportions*(1-alleleProportions)
+denom <- sqrt(sumPOneMinusP%*%t(sumPOneMinusP))
+varcovMatrixHap <- (numX1Y1 - evX1Y1)/denom
+
 varcovMatrix <- (varcovMatrixHap[c(T,F),c(T,F)] + varcovMatrixHap[c(T,F),c(F,T)] + varcovMatrixHap[c(F,T),c(T,F)] + varcovMatrixHap[c(F,T),c(F,T)])/4

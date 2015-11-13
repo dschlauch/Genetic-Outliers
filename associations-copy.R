@@ -1,5 +1,6 @@
 library(MASS)
 library(ggplot2)
+library(boot)
 
 chr <- 1
 numRows <- 1000
@@ -15,8 +16,7 @@ group <- as.character(sample[,3])
 sex <- as.character(sample[,4])
 
 
-
-getResultDF <- function(filename, phenotype, numRows, linesAtATime=1000, correctionVec=NULL, varFactor=T, sampleSubset=NULL){
+getResultDF <- function(filename, phenotype, numRows, linesAtATime=1000, correctionVec=NULL, varFactor=T, sampleSubset=NULL, binary=T, logit=F){
     
     if(is.null(correctionVec)){
         correction <- function(geno){
@@ -27,11 +27,20 @@ getResultDF <- function(filename, phenotype, numRows, linesAtATime=1000, correct
         x <- cbind(1, correctionVec)
         correctionHat  <- x %*% ginv(t(x)%*%x) %*% t(x)
         correction <- function(geno){
-            fitted <- correctionHat %*% geno
-            # Dan's correction
-            fitted[fitted<.001]<-.001
-            fitted[fitted>.999]<-.999
-            list("corrected"=(geno - fitted),"fitted"=fitted)
+            # Dan's correction for fitted values outside range
+#             if(binary){
+#                 models <- apply(geno, 2, function(vec){
+#                     model <- glm.fit(x,vec, family=binomial())
+#                     model
+#                 })
+#                 correc <- do.call(cbind,lapply(models,function(m){m$res}))
+#                 fitted <- do.call(cbind,lapply(models,function(m){m$fit}))
+#                 res <- list("corrected"=correc,"fitted"=fitted)
+#             } else {
+                fitted <- correctionHat %*% geno
+                res <- list("corrected"=(geno - fitted),"fitted"=fitted)
+#             }
+            res
         }
     }
     # Unless specified, use all the samples
@@ -55,8 +64,9 @@ getResultDF <- function(filename, phenotype, numRows, linesAtATime=1000, correct
         numAlleles <- colSums(alleles)
         # apply correction here
         allelesCorrected <- correction(alleles)
-#         alleles <- allelesCorrected$corrected
+        alleles <- allelesCorrected$corrected
         phenotypeMatrix <- phenotypeMatrixCorrected$corrected
+        
         if(is.null(correctionVec)|!varFactor){
             varianceFactor <- matrix(numSamples, nrow=ncol(phenotypeMatrix), ncol=ncol(alleles))
         } else {
@@ -74,8 +84,18 @@ getResultDF <- function(filename, phenotype, numRows, linesAtATime=1000, correct
         }
         print(dim(varianceFactor))
 
+        # change to weighted corr 11/9/15
+        # reverted back 11/12/15
         r.values <- cor(phenotypeMatrix, allelesCorrected$corrected)
         negLogPValue <- -log(1-pt(r.values*sqrt((varianceFactor-2)/(1-r.values^2)), varianceFactor))
+#         yVariances <- phenotypeMatrixCorrected$fitted*(1-phenotypeMatrixCorrected$fitted)
+#         xProb <- allelesCorrected$fitted/2
+#         xVariances <- 2*xProb*(1-xProb) #variance of Binomial(2,xProb)
+#         r.values <- sapply(1:ncol(phenotypeMatrix), function(i){
+#             sapply(1:ncol(allelesCorrected$corrected), function(j){
+#                 corr(cbind(phenotypeMatrix[,i],allelesCorrected$corrected[,j]), w=sqrt(yVariances[,i]*xVariances[,j]))
+#             })
+#         })
         rbind(numAlleles, negLogPValue, varianceFactor, alleles)
         
     })))
@@ -85,6 +105,8 @@ getResultDF <- function(filename, phenotype, numRows, linesAtATime=1000, correct
     resultMatrix <- data.frame(resultMatrix)
     #Filter out 0,1 allele SNPs
     filter <- resultMatrix[,1]>(numSamples*2/50) & (numSamples*2-resultMatrix[,1])>(numSamples*2/50)
+    #Remove rows which have NaNs
+    filter[which(is.na(rowSums(resultMatrix)))]<-F
     resultMatrix <- resultMatrix[filter,]
     
     obsPValues <- rep(NA, nrow(resultMatrix))
@@ -152,10 +174,18 @@ names(popRisks) <- pops
 
 sharpRisk <-as.numeric(pop%in%sample(pops,2))
 
-gradualRisk <- replicate(100, rbinom(numSamples, size=1, prob=(superRisks[group] + popRisks[pop])))
-sharpRisk   <- replicate(100, rbinom(numSamples, size=1, prob=as.numeric(pop%in%sample(pops,1))/5))
-randomRisk  <- replicate(100, rbinom(numSamples, size=1, prob=.25))
+if (phenotypeVariable=="binary"){
+    
+    gradualRisk <- replicate(100, rbinom(numSamples, size=1, prob=(superRisks[group] + popRisks[pop])))
+    sharpRisk   <- replicate(100, rbinom(numSamples, size=1, prob=as.numeric(pop%in%sample(pops,1))/5))
+    randomRisk  <- replicate(100, rbinom(numSamples, size=1, prob=.25))
 
+# Added continuous phenotype instead of binary
+}else{
+    gradualRisk <- replicate(100, rnorm(numSamples, mean=(superRisks[group] + popRisks[pop]),sd=.25))
+    sharpRisk   <- replicate(100, rnorm(numSamples, mean=as.numeric(pop%in%sample(pops,1)),sd=.25))
+    randomRisk  <- replicate(100, rnorm(numSamples))
+}
 superpop.correction <- cbind(as.numeric(group%in%"AFR"),as.numeric(group%in%"AMR"),as.numeric(group%in%"EAS"),as.numeric(group%in%"EUR"))
 subpop.correction <- sapply(pops, function(x){as.numeric(pop %in% x)})[,-1]
 ## End of day on 7/8/15
@@ -168,21 +198,39 @@ jaccard.correction <- eigen(jaccardMatrix)$vectors[,1:10]
 varcov.correction <- eigen(varcovMatrix)$vectors[,1:10]
 
 
-runAndPlot <- function(chr=1, correctMethod="uncorrected", ATT="ATT", subpops="all", numEigenVectors=2, numRows=5000){
+runAndPlot <- function(chr=1, correctMethod="uncorrected", ATT="ATT", subpops="all", numEigenVectors=2, numRows=5000, phenotypeVariable="binary"){
     print(correctMethod)
     print(ATT)
     print(subpops)
-    if("all"%in%subpops){
-        sampleSubset <- rep(T,length(pop))
-        gradualRisk <- replicate(100, rbinom(numSamples, size=1, prob=(superRisks[group] + popRisks[pop])))
-        sharpRisk   <- replicate(100, rbinom(numSamples, size=1, prob=as.numeric(pop%in%sample(pops,1))/5))
-        randomRisk  <- replicate(100, rbinom(numSamples, size=1, prob=.25))
-    } else {
-        sampleSubset <- pop %in% subpops
-        gradualRisk <- replicate(100, rbinom(sum(sampleSubset), size=1, prob=(.2+as.numeric(pop%in%subpops[1])[sampleSubset]/10)))
-        sharpRisk   <- replicate(100, rbinom(sum(sampleSubset), size=1, prob=as.numeric(pop%in%subpops[1])[sampleSubset]/5))
-        randomRisk  <- replicate(100, rbinom(sum(sampleSubset), size=1, prob=.25))
+
+    if (phenotypeVariable=="binary"){
+        if("all"%in%subpops){
+            sampleSubset <- rep(T,length(pop))
+            gradualRisk <- replicate(100, rbinom(numSamples, size=1, prob=(superRisks[group] + popRisks[pop])))
+            sharpRisk   <- replicate(100, rbinom(numSamples, size=1, prob=as.numeric(pop%in%sample(pops,1))/5))
+            randomRisk  <- replicate(100, rbinom(numSamples, size=1, prob=.25))
+        } else {
+            sampleSubset <- pop %in% subpops
+            gradualRisk <- replicate(100, rbinom(sum(sampleSubset), size=1, prob=(.2+as.numeric(pop%in%subpops[1])[sampleSubset]/10)))
+            sharpRisk   <- replicate(100, rbinom(sum(sampleSubset), size=1, prob=as.numeric(pop%in%subpops[1])[sampleSubset]/5))
+            randomRisk  <- replicate(100, rbinom(sum(sampleSubset), size=1, prob=.25))
+        }
+        # Added continuous phenotype instead of binary
+    }else{
+        if("all"%in%subpops){
+            sampleSubset <- rep(T,length(pop))
+            gradualRisk <- replicate(100, rnorm(numSamples, mean=(superRisks[group] + popRisks[pop]),sd=.25))
+            sharpRisk   <- replicate(100, rnorm(numSamples, mean=as.numeric(pop%in%sample(pops,1)),sd=.25))
+            randomRisk  <- replicate(100, rnorm(numSamples))
+        } else {
+            sampleSubset <- pop %in% subpops
+            gradualRisk <- replicate(100, rnorm(sum(sampleSubset), mean=(.2+as.numeric(pop%in%subpops[1])[sampleSubset]/10), sd=.25))
+            sharpRisk   <- replicate(100, rnorm(sum(sampleSubset), mean=as.numeric(pop%in%subpops[1])[sampleSubset]/5, sd=.25))
+            randomRisk  <- replicate(100, rnorm(sum(sampleSubset), mean=.25, sd=.25))
+        }
     }
+    
+    
     if(ATT=="ATT"){
         varFactor<-F
     } else {
@@ -205,7 +253,7 @@ runAndPlot <- function(chr=1, correctMethod="uncorrected", ATT="ATT", subpops="a
     
     #results  <- getResultDF(filename=paste('~/1000GP/data/1000GP_Phase3_chr', chr, '.hap.gz',sep=''), phenotype= list(randomRisk, gradualRisk, sharpRisk), numRows=numRows, linesAtATime=1000, correctionVec = correction, varFactor=varFactor, sampleSubset=sampleSubset)
     # 10/5/15 replace individual chromosome with filtered file
-    results  <- getResultDF(filename=paste('~/1000GP/data/combinedFiltered100.gz',sep=''), phenotype= list(randomRisk, gradualRisk, sharpRisk), numRows=numRows, linesAtATime=1000, correctionVec = correction, varFactor=varFactor, sampleSubset=sampleSubset)
+    results  <- getResultDF(filename=paste('~/1000GP/data/combinedFiltered100.gz',sep=''), phenotype= list(randomRisk, gradualRisk, sharpRisk), numRows=numRows, linesAtATime=1000, correctionVec = correction, varFactor=varFactor, sampleSubset=sampleSubset,logit=(phenotypeVariable=="binary"))
     
     png(paste("~/1000GP/plots/chr", chr,"_",correctMethod,"_", ATT, "_",paste(subpops, collapse=""),".png",sep=""), width=1200)
     print(ggplot(results, aes(Expected, Observed, color=MAF))+ geom_abline(intercept = 0) + ylim(0, 20) + ggtitle(paste("Nongenetic Phenotype Risk (",correctMethod,") - ",paste(subpops, collapse="-"),sep="")) + geom_point() + facet_wrap(~ phenotype))

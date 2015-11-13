@@ -60,7 +60,7 @@ plotHeatmap <-  function(x, subset=NA, title="GSM"){
     colnames(simMat) <- pop[subset]
     hc <- hclust(as.dist(1-simMat),method="average")
     d <- dendrapply(as.dendrogram(hc, hang=max(simMat)*.1), labelCol)
-    plot(d, main="Hierarchical Clustering across superpopulations", ylim=c(1-max(simMat)*1.25,1))
+#     plot(d, main="Hierarchical Clustering across superpopulations", ylim=c(1-max(simMat)*1.25,1))
     
 #     simMat[simMat>.005]<-.005
     simMat[simMat>quantile(simMat,.99)]<-quantile(simMat,.99)

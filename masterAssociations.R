@@ -1,23 +1,43 @@
-source('~/1000GP/calculatePCA.R')
-source('~/1000GP/associations-copy.R')
+
 
 chr <- "filtered100"
-numRows <- 100000
-varianceEstimate <- "ATT" 
+numRows <- 500000
+varianceEstimate <- "adjVar" 
 subpops <- c("all","all")
 #subpops <- c("TSI","IBS")
 args<-commandArgs(TRUE)
 correctionMethods <- c("subpop","varcov","jaccard", "uncorrected")
+phenotypeVariable <- "continuous" #"binary"
 if(length(args)!=0){
     chr <- as.numeric(args[1])
     subpops <- c(args[2], args[3])
     numRows <- as.numeric(args[4])
     varianceEstimate <- args[5] # "adjVar" or "ATT"
-    correctionMethods <- args[-1:-5] # "uncorrected","varcov","jaccard", and "subpop"
+    phenotypeVariable <- args[6]
+    correctionMethods <- args[-1:-6] # "uncorrected","varcov","jaccard", and "subpop"
 }
+
+source('~/1000GP/calculatePCA.R')
+source('~/1000GP/associations-copy.R')
+
+library(foreach)
+library(doParallel)
+
+cl <- makeCluster(4)
+registerDoParallel(cl)
+strt  <- Sys.time()
+foreach(i=1:length(correctionMethods),.packages=c()) %dopar% {
+    print(args)
+    print(correctionMethods[i])
+    runAndPlot(chr=chr,correctMethod=correctionMethods[i], ATT=varianceEstimate, subpops=subpops, numEigenVectors=2, numRows=numRows, phenotypeVariable)
+    gc()
+}
+print(Sys.time()-strt)
+stopCluster(cl)
+
 sapply(correctionMethods, function(method){
     print(args)
-    runAndPlot(chr=chr,correctMethod=method, ATT=varianceEstimate, subpops=subpops, numEigenVectors=1, numRows=numRows)
+    runAndPlot(chr=chr,correctMethod=method, ATT=varianceEstimate, subpops=subpops, numEigenVectors=2, numRows=numRows, phenotypeVariable)
     gc()
 })
 # 

@@ -21,7 +21,7 @@ generateggplotDF <- function(jaccard.correction, varcov.correction, sampleSubset
   components.df
 }
 plotPCAsSideBySide <-  function(components.df){
-  jaccardPlot <- ggplot(components.df, aes(x = JaccardVector1, y = JaccardVector2)) + ggtitle("Jaccard") + geom_point(aes(color=factor(pop))) + ylab("Component 2")+ xlab("Component 1") + guides(colour=FALSE)
+  jaccardPlot <- ggplot(components.df, aes(x = JaccardVector1, y = JaccardVector2)) + ggtitle("Weighted Jaccard") + geom_point(aes(color=factor(pop))) + ylab("Component 2")+ xlab("Component 1") + guides(colour=FALSE)
   varcovPlot <-  ggplot(components.df, aes(x = VarcovVector1, y = VarcovVector2))   + ggtitle("Variance") + geom_point(aes(color=factor(pop))) + ylab("Component 2")+ xlab("Component 1")
   grid.arrange(jaccardPlot, varcovPlot, ncol=2,top = "Principal Component Plots")
 }
@@ -46,6 +46,8 @@ sampleSubset <- getSampleSubset(c("STU","ITU"))
 sampleSubset <- getSampleSubset(c("CEU","YRI"))
 sampleSubset <- getSampleSubset(c("CHB","CHS"))
 sampleSubset <- getSampleSubset(c("GBR","FIN"))
+sampleSubset <- getSampleSubset(c("GIH","ITU"))
+sampleSubset <- getSampleSubset(c("ESN","LWK"))
 
 jaccard.correction <- eigen(jaccardMatrix[sampleSubset,sampleSubset])$vectors
 varcov.correction <- eigen(varcovMatrix[sampleSubset,sampleSubset])$vectors
