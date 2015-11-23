@@ -1,7 +1,7 @@
 
 
 chr <- "filtered100"
-numRows <- 500000
+numRows <- 100000
 varianceEstimate <- "adjVar" 
 subpops <- c("all","all")
 #subpops <- c("TSI","IBS")
@@ -26,7 +26,7 @@ library(doParallel)
 cl <- makeCluster(4)
 registerDoParallel(cl)
 strt  <- Sys.time()
-foreach(i=1:length(correctionMethods),.packages=c()) %dopar% {
+foreach(i=1:length(correctionMethods),.packages=c("ggplot2","MASS")) %dopar% {
     print(args)
     print(correctionMethods[i])
     runAndPlot(chr=chr,correctMethod=correctionMethods[i], ATT=varianceEstimate, subpops=subpops, numEigenVectors=2, numRows=numRows, phenotypeVariable)
@@ -35,11 +35,12 @@ foreach(i=1:length(correctionMethods),.packages=c()) %dopar% {
 print(Sys.time()-strt)
 stopCluster(cl)
 
-sapply(correctionMethods, function(method){
-    print(args)
-    runAndPlot(chr=chr,correctMethod=method, ATT=varianceEstimate, subpops=subpops, numEigenVectors=2, numRows=numRows, phenotypeVariable)
-    gc()
-})
+# 
+# sapply(correctionMethods, function(method){
+#     print(args)
+#     runAndPlot(chr=chr,correctMethod=method, ATT=varianceEstimate, subpops=subpops, numEigenVectors=2, numRows=numRows, phenotypeVariable)
+#     gc()
+# })
 # 
 # runAndPlot(chr=chr,correctMethod="uncorrected", ATT="adjVar", subpops=subpops, numRows=numRows)
 # gc()
@@ -66,5 +67,5 @@ sapply(correctionMethods, function(method){
 # runAndPlot(chr=chr,correctMethod="jaccard", ATT="adjVar", subpops="all", numRows=numRows)
 # gc()
 # runAndPlot(chr=chr,correctMethod="varcov", ATT="adjVar", subpops="all", numRows=numRows)
-# gc()
+# gc() 
 

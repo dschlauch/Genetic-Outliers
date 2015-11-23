@@ -40,7 +40,7 @@ V.interval.list[["20-50"]] <- V.list[["50"]]
 
 
 # Read in the U's and V's that were gathered in an interval
-interval.file.list <- list.files(pattern="output")[!grepl("_20_",list.files(pattern="output"))]
+interval.file.list <- list.files(pattern="output")[!(grepl("_20_",list.files(pattern="output"))|grepl("ass",list.files(pattern="output")))]
 V.list2       <- lapply(file.path(interval.file.list, "all_V.csv"), read.csv, row.names=1)
 U.list2       <- lapply(file.path(interval.file.list, "all_U.csv"), read.csv, row.names=1)
 V.list2       <- lapply(V.list2, as.matrix)
@@ -226,15 +226,15 @@ ggplot(data=subset(ggData,grepl("CEU vs GBR",ggData$pop)), aes(x=interval_percen
 dev.off()
 
 # subpop HCL
-hclplot <- function(jaccardMat, pop1, pop2){
+hclplot <- function(jaccardMat, pop1, pop2, name){
     rownames(jaccardMat) <- sample[,2]
     popsubset <- grepl(pop1, rownames(jaccardMat))|grepl(pop2, rownames(jaccardMat))
     jaccardMat <- jaccardMat[popsubset,popsubset]
     diag(jaccardMat) <- 0
     lowest.node <- max(jaccardMat)
     hclObj <- as.dendrogram(hclust(as.dist(1-jaccardMat),method="average"), hang=lowest.node*.1)
-    labels_colors(hclObj) <- as.numeric(as.factor(rownames(jaccardMat)))[order.dendrogram(hclObj)]
-    plot(hclObj,ylim=c(1-lowest.node*1.25,1), main = paste(pop1,', ',pop2,' Hierarchical Clustering',sep=""))
+    labels_colors(hclObj) <- c('red','blue')[as.numeric(as.factor(rownames(jaccardMat)))[order.dendrogram(hclObj)]]
+    plot(hclObj,ylim=c(1-lowest.node*1.25,1), main = paste0(pop1,', ',pop2,' Hierarchical Clustering\n', name), axes=FALSE)
 }
 
 createHCLDir <- function(jaccardList, pop1, pop2){
@@ -242,16 +242,20 @@ createHCLDir <- function(jaccardList, pop1, pop2){
     dir.create(dir, showWarnings = FALSE, recursive = FALSE)
     invisible(lapply(names(jaccardList), function(name){
         png(paste(dir,'/', name,".png",sep=""), width=1600)
-        hclplot(jaccard.interval.list[[name]], pop1, pop2)
+        hclplot(jaccard.interval.list[[name]], pop1, pop2, paste0("MAF: ",substring(name,2),"%"))
         dev.off()
     }))
+    system(paste0("convert -delay 150 -loop 0 '", dir, "'/*.png '", dir, "'/animation.gif"))
 }
+names(jaccard.interval.list) <- paste0(LETTERS[16:1],gsub('%','',interval_percent[1:16]))
 createHCLDir(jaccard.interval.list,'CEU','CHB')
 createHCLDir(jaccard.interval.list,'CHB','JPT')
 createHCLDir(jaccard.interval.list,'CHB','CHS')
-createHCLDir(jaccard.interval.list,'IBS','TSI')
+createHCLDir(jaccard.interval.list,'IBS','TSI') 
 createHCLDir(jaccard.interval.list,'ITU','STU')
 createHCLDir(jaccard.interval.list,'LWK','YRI')
 createHCLDir(jaccard.interval.list,'PJL','PUR')
 createHCLDir(jaccard.interval.list,'GBR','FIN')
+createHCLDir(jaccard.interval.list,'PJL','GBR')
+
 

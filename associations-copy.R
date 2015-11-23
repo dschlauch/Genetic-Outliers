@@ -225,7 +225,7 @@ runAndPlot <- function(chr=1, correctMethod="uncorrected", ATT="ATT", subpops="a
         } else {
             sampleSubset <- pop %in% subpops
             gradualRisk <- replicate(100, rnorm(sum(sampleSubset), mean=(.2+as.numeric(pop%in%subpops[1])[sampleSubset]/10), sd=.25))
-            sharpRisk   <- replicate(100, rnorm(sum(sampleSubset), mean=as.numeric(pop%in%subpops[1])[sampleSubset]/5, sd=.25))
+            sharpRisk   <- replicate(100, rnorm(sum(sampleSubset), mean=as.numeric(pop%in%subpops[1])[sampleSubset]/5, sd=.01))
             randomRisk  <- replicate(100, rnorm(sum(sampleSubset), mean=.25, sd=.25))
         }
     }
@@ -260,4 +260,4 @@ runAndPlot <- function(chr=1, correctMethod="uncorrected", ATT="ATT", subpops="a
     write.csv(results, file=paste("~/1000GP/output_associations/", chr,"_",correctMethod,"_", ATT, "_",paste(subpops, collapse=""),".csv", sep=""))
     dev.off()
     print(paste0("plot created: ","~/1000GP/plots/chr", chr,"_",correctMethod,"_", ATT, "_",paste(subpops, collapse=""),".png"))
-}
+} 

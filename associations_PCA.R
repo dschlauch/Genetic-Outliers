@@ -21,8 +21,8 @@ generateggplotDF <- function(jaccard.correction, varcov.correction, sampleSubset
   components.df
 }
 plotPCAsSideBySide <-  function(components.df){
-  jaccardPlot <- ggplot(components.df, aes(x = JaccardVector1, y = JaccardVector2)) + ggtitle("Weighted Jaccard") + geom_point(aes(color=factor(pop))) + ylab("Component 2")+ xlab("Component 1") + guides(colour=FALSE)
-  varcovPlot <-  ggplot(components.df, aes(x = VarcovVector1, y = VarcovVector2))   + ggtitle("Variance") + geom_point(aes(color=factor(pop))) + ylab("Component 2")+ xlab("Component 1")
+  jaccardPlot <- ggplot(components.df, aes(x = JaccardVector1, y = JaccardVector2)) + ggtitle("Our method") + geom_point(aes(color=factor(pop))) + ylab("Component 2")+ xlab("Component 1") + guides(colour=FALSE)
+  varcovPlot <-  ggplot(components.df, aes(x = VarcovVector1, y = VarcovVector2))   + ggtitle("PCA (Variance)") + geom_point(aes(color=factor(pop))) + ylab("Component 2")+ xlab("Component 1")
   grid.arrange(jaccardPlot, varcovPlot, ncol=2,top = "Principal Component Plots")
 }
 withinVsBetween <-  function(components.df){
@@ -42,12 +42,18 @@ withinVsBetween <-  function(components.df){
 
 sampleSubset <- getSampleSubset("all")
 sampleSubset <- getSampleSubset(c("TSI","IBS"))
-sampleSubset <- getSampleSubset(c("STU","ITU"))
+sampleSubset <- getSampleSubset(c("ITU","STU"))
 sampleSubset <- getSampleSubset(c("CEU","YRI"))
 sampleSubset <- getSampleSubset(c("CHB","CHS"))
 sampleSubset <- getSampleSubset(c("GBR","FIN"))
 sampleSubset <- getSampleSubset(c("GIH","ITU"))
 sampleSubset <- getSampleSubset(c("ESN","LWK"))
+sampleSubset <- getSampleSubset(c("PJL","BEB"))
+sampleSubset <- getSampleSubset(c("CDX","CHB"))
+sampleSubset <- getSampleSubset(c("CDX","CHS"))
+sampleSubset <- getSampleSubset(c("PUR","ACB"))
+sampleSubset <- getSampleSubset(c("KHV","CHS"))
+sampleSubset <- getSampleSubset(c("ITU","BEB"))
 
 jaccard.correction <- eigen(jaccardMatrix[sampleSubset,sampleSubset])$vectors
 varcov.correction <- eigen(varcovMatrix[sampleSubset,sampleSubset])$vectors
