@@ -1,4 +1,4 @@
-calculateSMatrix <- function(subpop="CEU", numberOfLines=10695, minVariants=5, alpha=.05){
+calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000.gz", numberOfLines=10695, minVariants=5, alpha=.01){
     print(subpop)
     filename <- "./data/combinedFiltered1000.gz"
     con <- file(filename, "rt")
@@ -14,8 +14,11 @@ calculateSMatrix <- function(subpop="CEU", numberOfLines=10695, minVariants=5, a
     sumVariants <- rowSums(genotypes)
     # remove < n variants
     genotypes <- genotypes[sumVariants>minVariants,]
+    print("Number of used variants")
+    print(nrow(genotypes))
     numFilteredVariants <- nrow(genotypes)
     sumFilteredVariants <- rowSums(genotypes)
+    varcovMat <- cov(genotypes[,c(T,F)] + genotypes[,c(F,T)])
     
     totalPossiblePairs <- choose(numSamples,2)
     totalPairs <- choose(sumFilteredVariants,2)
@@ -25,9 +28,8 @@ calculateSMatrix <- function(subpop="CEU", numberOfLines=10695, minVariants=5, a
     print("variance of s")
     print(var_s)
     
-    alpha <- .05
     num_comparisons <- numSamples*(numSamples-1)/2
-    bonferroni_cutoff <- qnorm((1-alpha)^(1/num_comparisons), sd=sqrt(var_s)) + 1
+    bonferroni_cutoff <- qnorm((1-alpha/(2*num_comparisons)), sd=sqrt(var_s)) + 1
 
     s.i.j.numerator <- t(genotypes*weights)%*%genotypes
     s.i.j.denominator <- numFilteredVariants
@@ -44,10 +46,18 @@ calculateSMatrix <- function(subpop="CEU", numberOfLines=10695, minVariants=5, a
     topHapIndices <- sapply(1:10, function(x){
         which(s.i.j==topValuesHap[x], arr.ind=T)[1,]
     })
-    topHapIndices <- topHapIndices[,topValuesHap[1:10]>bonferroni_cutoff]
-    mappedTopHapHits <- matrix(hap.sampleIDs.subset[topHapIndices],nrow=2)
-    topValuesHap <- topValuesHap[topValuesHap>bonferroni_cutoff]
-    topValuesHap <- head(topValuesHap,10)
+    
+    # This needed to prevent errors when there are no significant results
+    if (sum(topValuesHap[1:10]>bonferroni_cutoff)>0){
+        topHapIndices <- topHapIndices[,topValuesHap[1:10]>bonferroni_cutoff]
+        mappedTopHapHits <- matrix(hap.sampleIDs.subset[topHapIndices],nrow=2)
+        topHitsNamesHap <- apply(mappedTopHapHits,2,paste0,collapse="_")
+        topValuesHap <- topValuesHap[topValuesHap>bonferroni_cutoff]
+        topValuesHap <- head(topValuesHap,10)
+    } else {
+        topHitsNamesHap <- NA
+        topValuesHap <- 0
+    }
     
     # Collapse to diploid
     s.i.j.dip <- (s.i.j[c(T,F),c(T,F)] + s.i.j[c(F,T),c(T,F)] +s.i.j[c(T,F),c(F,T)] + s.i.j[c(F,T),c(F,T)])/4
@@ -64,32 +74,42 @@ calculateSMatrix <- function(subpop="CEU", numberOfLines=10695, minVariants=5, a
     topDipIndices <- sapply(1:10, function(x){
         which(s.i.j.dip==topValuesDip[x], arr.ind=T)[1,]
     })
-    topDipIndices <- topDipIndices[,topValuesDip[1:10]>bonferroni_cutoff_dip]
-    mappedTopDipHits <- matrix(sampleIDs.subset[topDipIndices],nrow=2)
-    topValuesDip <- topValuesDip[topValuesDip>bonferroni_cutoff_dip]
-    topValuesDip <- head(topValuesDip,10)
+    
+    # This needed to prevent errors when there are no significant results
+    if (sum(topValuesDip[1:10]>bonferroni_cutoff_dip)>0){
+        topDipIndices <- topDipIndices[,topValuesDip[1:10]>bonferroni_cutoff_dip]
+        mappedTopDipHits <- matrix(sampleIDs.subset[topDipIndices],nrow=2)
+        topHitsNamesDip <- apply(mappedTopDipHits,2,paste0,collapse="_")
+        topValuesDip <- topValuesDip[topValuesDip>bonferroni_cutoff_dip]
+        topValuesDip <- head(topValuesDip,10)        
+    } else {
+        topHitsNamesDip <- NA
+        topValuesDip <- 0
+    }
     plotData <- data.frame(hap=(s.i.j[row(s.i.j)!=col(s.i.j)]))
-    hapPlot <- ggplot(plotData, aes(hap)) + geom_histogram(color="blue",binwidth=.02) + 
-        ggtitle(paste0("Distribution of haploid s, population: ",paste0(subpop,collapse="_"))) + xlab("s") +
-        xlab("s") + geom_vline(xintercept = bonferroni_cutoff, color="red") +
-        annotate("text", x=bonferroni_cutoff -.06, y=400, label=paste0("Multiple testing cutoff, p=",format(1/num_comparisons, digits=1)), color="red",angle = 90) +
-        annotate("text", x=topValuesHap, y=10, label=apply(mappedTopHapHits,2,paste0,collapse="_"),angle = 80, hjust=0)
+    hapPlot <- ggplot(plotData, aes(hap, col="blue")) + geom_histogram(color="red",binwidth=.02,fill=I("blue")) + 
+        ggtitle(paste0(subpop,collapse="_")) + 
+        theme(plot.title = element_text(size=80), axis.title.x = element_text(size = 10))+ 
+        xlab("s") + geom_vline(xintercept = bonferroni_cutoff, color="red", linetype="dotted") +
+        annotate("text", x=bonferroni_cutoff -.06, y=400, label=paste0("Multiple testing cutoff, p=",format(1/num_comparisons, digits=1)), color="red",angle = 90, size = 10, hjust = 0) +
+        annotate("text", x=topValuesHap, y=10, label=topHitsNamesHap,angle = 80, hjust=0, size = 10)
     
     
-    tiff(paste0("./plots/s_distributions/",paste0(subpop,collapse="_"),"haploid.tiff"))
+    tiff(paste0("./plots/s_distributions/",paste0(subpop,collapse="_"),"haploid.tiff"), width=960, height=960)
     print(hapPlot)
     dev.off()
     plotData <- data.frame(dip=s.i.j.dip[row(s.i.j.dip)!=col(s.i.j.dip)])
-    dipPlot <- ggplot(plotData, aes(dip)) + geom_histogram(color="blue",binwidth=.02) + 
-        ggtitle(paste0("Distribution of diploid s, population: ",paste0(subpop,collapse="_"))) + 
-        xlab("s") + geom_vline(xintercept = bonferroni_cutoff_dip, color="red") +
-        annotate("text", x=bonferroni_cutoff_dip -.02, y=200, label=paste0("Multiple testing cutoff, p=",format(1/num_comparisons_dip, digits=1)), color="red",angle = 90)+
-        annotate("text", x=topValuesDip, y=10, label=apply(mappedTopDipHits,2,paste0,collapse="_"),angle = 45, hjust=0)
+    dipPlot <- ggplot(plotData, aes(dip, col="blue")) + geom_histogram(color="red",binwidth=.02,fill=I("blue")) + 
+        ggtitle(paste0(subpop,collapse="_"))  + 
+        theme(plot.title = element_text(size=80), axis.title.x = element_text(size = 10)) + 
+        xlab("s") + geom_vline(xintercept = bonferroni_cutoff_dip, color="red", linetype="dotted") +
+        annotate("text", x=bonferroni_cutoff_dip -.02, y=200, label=paste0("Multiple testing cutoff, p=",format(1/num_comparisons_dip, digits=1)), color="red", angle = 90, size = 10, hjust = 0) +
+        annotate("text", x=topValuesDip, y=10, label=topHitsNamesDip,angle = 80, hjust=0, size = 10)
     
-    tiff(paste0("./plots/s_distributions/",paste0(subpop,collapse="_"),"diploid.tiff"))
+    tiff(paste0("./plots/s_distributions/",paste0(subpop,collapse="_"),"diploid.tiff"), width=960, height=960)
     print(dipPlot)
     dev.off()
     
-    saveRDS(s.i.j, paste0("./plots/s_distributions/plotdata/",paste0(subpop,collapse="_"),"_sij.rds",collapse="_"))
-    
+    saveRDS(s.i.j.dip, paste0("./plots/s_distributions/plotdata/",paste0(subpop,collapse="_"),"_sij.rds",collapse="_"))
+    list(s_i_j = s.i.j.dip, varcovMat=varcovMat)
 }

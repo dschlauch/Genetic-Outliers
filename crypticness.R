@@ -1,6 +1,14 @@
-library(readr)
 library(ggplot2)
 
+
+genotypeFile <- "./data/combinedFiltered1000.gz"
+minVariants <- 10
+args<-commandArgs(TRUE)
+if(length(args)!=0){
+    genotypeFile <- args[1]
+    numberOfLines <- as.numeric(args[2])
+    minVariants <- as.numeric(args[3])
+}
 
 #### Simulated data
 # simn <- 3000
@@ -21,7 +29,8 @@ hap.pop <- rep(pop,each=2)
 hap.sampleIDs <- rep(as.character(sample[,1]),each=2)
 
 source('~/1000GP/s_matrix_functions.R')
-# calculateSMatrix(c("CEU"), numberOfLines=10695, minVariants=20)
+source('~/1000GP/all_samples_HCL.R')
+# calculateSMatrix(c("CEU"), numberOfLines=695, minVariants=20)
 # calculateSMatrix(c("CEU","CHB"), numberOfLines=10695, minVariants=20)
 # sapply(unique(pop),calculateSMatrix, numberOfLines=10695, minVariants=20)
 
@@ -38,8 +47,21 @@ if(!is.na(num_cores)){
 }
 
 res <- foreach(i=unique(pop),.packages=c("ggplot2")) %dopar% {
-    calculateSMatrix(i, numberOfLines=80695, minVariants=10)
+    calculateSMatrix(i, filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants)
 }
+
+res <- calculateSMatrix(unique(pop), filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants)
+res <- readRDS('~/1000GP/plots/s_distributions/plotdata/allSamples_sij_80695.rds')
+allSamplesGSM <- res[['s_i_j']]
+varcovMat <- res[['varcovMat']]
+
+tiff('~/1000GP/plots/s_matrix.tiff', width=960, height=960)
+plotHeatmap(allSamplesGSM, title="s GSM")
+dev.off()
+
+tiff('~/1000GP/plots/varcov_matrix.tiff', width=960, height=960)
+plotHeatmap(varcovMat,title="varcov GSM")
+dev.off()
 
 print(Sys.time()-strt)
 if(!is.na(num_cores)){

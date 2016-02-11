@@ -2,5 +2,8 @@
 output*/
 data/
 counts*/ 
+plots/
+*.tiff/
+*.rds/
 *.r
 .Rproj.user

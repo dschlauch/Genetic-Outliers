@@ -231,8 +231,9 @@ hclplot <- function(jaccardMat, pop1, pop2, name){
     popsubset <- grepl(pop1, rownames(jaccardMat))|grepl(pop2, rownames(jaccardMat))
     jaccardMat <- jaccardMat[popsubset,popsubset]
     diag(jaccardMat) <- 0
+    jaccardMat <- (max(jaccardMat)-jaccardMat)/max(jaccardMat)
     lowest.node <- max(jaccardMat)
-    hclObj <- as.dendrogram(hclust(as.dist(1-jaccardMat),method="average"), hang=lowest.node*.1)
+    hclObj <- as.dendrogram(hclust(as.dist(jaccardMat),method="average"), hang=lowest.node*.1)
     labels_colors(hclObj) <- c('red','blue')[as.numeric(as.factor(rownames(jaccardMat)))[order.dendrogram(hclObj)]]
     plot(hclObj,ylim=c(1-lowest.node*1.25,1), main = paste0(pop1,', ',pop2,' Hierarchical Clustering\n', name), axes=FALSE)
 }
