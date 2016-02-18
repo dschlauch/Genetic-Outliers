@@ -32,7 +32,6 @@ labelCol <- function(x) {
 # ### hierarchical clustering
 # 
 subset <- sample(2504,100)
-subset <- -related
 subset <- rep(T,2504)
 jm <- as.matrix(jaccardMatrix)[subset,subset]
 diag(jm)<-0
