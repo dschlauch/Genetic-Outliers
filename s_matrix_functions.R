@@ -29,9 +29,9 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     print("variance of s")
     print(var_s)
     
-    num_comparisons <- numSamples*(numSamples-1)/2
-    bonferroni_cutoff <- qnorm((1-alpha/(2*num_comparisons)), sd=sqrt(var_s)) + 1
-
+    #     num_comparisons <- numSamples*(numSamples-1)/2
+    #     bonferroni_cutoff <- qnorm((1-alpha/(2*num_comparisons)), sd=sqrt(var_s)) + 1
+    
     s.i.j.numerator <- t(genotypes*weights)%*%genotypes
     s.i.j.denominator <- numFilteredVariants
     s.i.j <- s.i.j.numerator/s.i.j.denominator
@@ -39,14 +39,14 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     print(mean(s.i.j[row(s.i.j)!=col(s.i.j)]))
     print(median(s.i.j[row(s.i.j)!=col(s.i.j)]))
     
-    plotFromGSM(s.i.j, var_s, hap.sampleIDs.subset, "haploid")
+    plotFromGSM(subpop, s.i.j, var_s, hap.sampleIDs.subset, "haploid")
     
     # Collapse to diploid
     s.i.j.dip <- (s.i.j[c(T,F),c(T,F)] + s.i.j[c(F,T),c(T,F)] +s.i.j[c(T,F),c(F,T)] + s.i.j[c(F,T),c(F,T)])/4
     # very lazy variance estimate...
     varS <- var_s/4
- 
-    plotFromGSM(s.i.j.dip, varS, sampleIDs.subset, "diploid")
+    
+    plotFromGSM(subpop,s.i.j.dip, varS, sampleIDs.subset, "diploid")
     
     
     
@@ -54,7 +54,7 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     saveRDS(s.i.j.dip, paste0("./plots/s_distributions/plotdata/",paste0(subpop,collapse="_"),"_sij_dip.rds"))
     list(s_i_j = s.i.j.dip, varcovMat=varcovMat)
 }
-plotFromGSM <- function(gsm, varS, sample_IDs, plotname=""){
+plotFromGSM <- function(subpop, gsm, varS, sample_IDs, plotname="", alpha=.01){
     print(mean(gsm[row(gsm)!=col(gsm)]))
     print(median(gsm[row(gsm)!=col(gsm)]))
     num_comparisons_dip <- choose(ncol(gsm),2)
@@ -85,8 +85,8 @@ plotFromGSM <- function(gsm, varS, sample_IDs, plotname=""){
     dipPlot <- ggplot(plotData, aes(values)) + 
         geom_histogram(color="red",binwidth=.01,fill=I("blue")) + 
         ggtitle(paste0(subpop,collapse="_"))  + 
-        theme(plot.title = element_text(size=40), axis.title.x = element_text(size = 10)) + 
-        xlab("s") + geom_vline(xintercept = bonferroni_cutoff_dip, color="red", linetype="dotted") +
+        theme(plot.title = element_text(size=40), axis.title.x = element_text(size = 10), axis.title.y = element_blank(), axis.text.y=element_blank()) + 
+        xlab("Similarity score") + geom_vline(xintercept = bonferroni_cutoff_dip, color="red", linetype="dotted") + 
         annotate("text", x=bonferroni_cutoff_dip -.015, y=200, label=paste0("Multiple testing cutoff, p=",format(1/num_comparisons_dip, digits=1)), color="red", angle = 90, size = 2, hjust = 0) +
         annotate("text", x=topValuesDip, y=10, label=topHitsNamesDip,angle = 80, hjust=0, size=2)
     
