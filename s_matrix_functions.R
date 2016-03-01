@@ -29,6 +29,12 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     print("variance of s")
     print(var_s)
     
+    # Calculate expected values conditional on kinship
+    meanOfWeights <- mean(weights)
+    kinships <- seq(0,.25,.001)
+    kinshipExpectation <- 1+kinships*(meanOfWeights-1)
+        
+    ggplot(data.frame(kinships, kinshipExpectation), aes(x=kinships, y=kinshipExpectation))+ geom_point()
     #     num_comparisons <- numSamples*(numSamples-1)/2
     #     bonferroni_cutoff <- qnorm((1-alpha/(2*num_comparisons)), sd=sqrt(var_s)) + 1
     
@@ -39,14 +45,16 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     print(mean(s.i.j[row(s.i.j)!=col(s.i.j)]))
     print(median(s.i.j[row(s.i.j)!=col(s.i.j)]))
     
-    plotFromGSM(subpop, s.i.j, var_s, hap.sampleIDs.subset, "haploid")
+    estimatedKinship <- (s.i.j-1)/(meanOfWeights-1)
+    plotFromGSM(subpop, s.i.j, var_s, estimatedKinship, hap.sampleIDs.subset, "haploid")
     
     # Collapse to diploid
     s.i.j.dip <- (s.i.j[c(T,F),c(T,F)] + s.i.j[c(F,T),c(T,F)] +s.i.j[c(T,F),c(F,T)] + s.i.j[c(F,T),c(F,T)])/4
     # very lazy variance estimate...
     varS <- var_s/4
     
-    plotFromGSM(subpop,s.i.j.dip, varS, sampleIDs.subset, "diploid")
+    estimatedKinshipDip <- (s.i.j.dip-1)/(meanOfWeights-1)
+    plotFromGSM(subpop,s.i.j.dip, varS, estimatedKinshipDip, sampleIDs.subset, "diploid")
     
     
     
@@ -54,7 +62,7 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     saveRDS(s.i.j.dip, paste0("./plots/s_distributions/plotdata/",paste0(subpop,collapse="_"),"_sij_dip.rds"))
     list(s_i_j = s.i.j.dip, varcovMat=varcovMat)
 }
-plotFromGSM <- function(subpop, gsm, varS, sample_IDs, plotname="", alpha=.01){
+plotFromGSM <- function(subpop, gsm, varS, kinship, sample_IDs, plotname="", alpha=.01){
     print(mean(gsm[row(gsm)!=col(gsm)]))
     print(median(gsm[row(gsm)!=col(gsm)]))
     num_comparisons_dip <- choose(ncol(gsm),2)
@@ -62,6 +70,7 @@ plotFromGSM <- function(subpop, gsm, varS, sample_IDs, plotname="", alpha=.01){
     bonferroni_cutoff_dip <- qnorm((1-alpha)^(1/num_comparisons_dip), sd=sqrt(varS)) + 1
     
     topValuesDip <- sort(gsm[row(gsm)>col(gsm)], decreasing=T)
+    topValuesKinship <- sort(kinship[row(kinship)>col(kinship)], decreasing=T)
     
     topDipIndices <- sapply(1:10, function(x){
         which(gsm==topValuesDip[x], arr.ind=T)[1,]
@@ -73,22 +82,31 @@ plotFromGSM <- function(subpop, gsm, varS, sample_IDs, plotname="", alpha=.01){
         mappedTopDipHits <- matrix(sample_IDs[topDipIndices],nrow=2)
         topHitsNamesDip <- apply(mappedTopDipHits,2,paste0,collapse="_")
         topValuesDip <- topValuesDip[topValuesDip>bonferroni_cutoff_dip]
-        topValuesDip <- head(topValuesDip,10)        
+        topValuesDip <- head(topValuesDip,10)
     } else {
         topHitsNamesDip <- NA
         topValuesDip <- 1
     }
-    
-    plotData <- data.frame(values=gsm[row(gsm)>col(gsm)])
+    pairs <- outer(sample_IDs, sample_IDs, paste)
+    plotData <- data.frame(values=gsm[row(gsm)>col(gsm)], pairs=paste0("  ",pairs[row(pairs)>col(pairs)]))
     minDip <- min(plotData$values)
-    maxDip <- max(plotData$values)
+    maxDip <- max(plotData$values)#ifelse(max(plotData$values)>bonferroni_cutoff_dip,max(plotData$values),NA)
     dipPlot <- ggplot(plotData, aes(values)) + 
-        geom_histogram(color="red",binwidth=.01,fill=I("blue")) + 
-        ggtitle(paste0(subpop,collapse="_"))  + 
+        geom_histogram(color="blue",binwidth=.01,fill=I("blue")) + 
+        ggtitle(paste0(subpop,collapse="_"))  + xlab("Similarity score") + 
         theme(plot.title = element_text(size=40), axis.title.x = element_text(size = 10), axis.title.y = element_blank(), axis.text.y=element_blank()) + 
-        xlab("Similarity score") + geom_vline(xintercept = bonferroni_cutoff_dip, color="red", linetype="dotted") + 
-        annotate("text", x=bonferroni_cutoff_dip -.015, y=200, label=paste0("Multiple testing cutoff, p=",format(1/num_comparisons_dip, digits=1)), color="red", angle = 90, size = 2, hjust = 0) +
-        annotate("text", x=topValuesDip, y=10, label=topHitsNamesDip,angle = 80, hjust=0, size=2)
+        
+        geom_vline(xintercept = bonferroni_cutoff_dip, color="red", linetype="dotted") + 
+        geom_vline(aes(xintercept = maxDip), color="blue", linetype="dotted") + 
+        geom_vline(xintercept = median(gsm[row(gsm)!=col(gsm)]), color="red", linetype=1) + 
+        
+        geom_text(data=subset(plotData, values > bonferroni_cutoff_dip), aes(values,label=pairs), y=0, angle = 80, hjust=0, size=3) +
+        geom_text(data=subset(plotData, values == maxDip), x=maxDip, y=Inf, label=paste0("hat(phi)==", round(topValuesKinship[1],3),"  "),parse = TRUE, color="blue", angle = 0, size = 5, vjust = 1, hjust = 1) +
+        
+        annotate("text", x=bonferroni_cutoff_dip, y=Inf, label=paste0("Multiple testing cutoff, p=",format(alpha/num_comparisons_dip, digits=1),"        "), color="red", angle = 90, size = 3, vjust = 1, hjust = 1) +
+        annotate("text", x=median(gsm[row(gsm)!=col(gsm)]), y=Inf, label=paste0("Median=",round(median(gsm[row(gsm)!=col(gsm)]),3),"   "), color="red", angle = 90, size = 3, vjust = 1, hjust = 1) 
+    
+    
     
     pdf(paste0("./plots/s_distributions/",paste0(subpop,collapse="_"), plotname, ".pdf"), width=4, height=4)
     print(dipPlot)

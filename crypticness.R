@@ -51,7 +51,7 @@ res <- foreach(pop_i=unique(pop),.packages=c("ggplot2")) %dopar% {
 }
 
 res <- calculateSMatrix(unique(pop), filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants)
-res <- calculateSMatrix(unique(pop)[1], filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants)
+res <- calculateSMatrix("CEU", filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants)
 
 res <- readRDS('~/1000GP/plots/s_distributions/plotdata/allSamples_sij_80695.rds')
 allSamplesGSM <- res[['s_i_j']]
