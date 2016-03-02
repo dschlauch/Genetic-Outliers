@@ -5,4 +5,5 @@ Discussion points 3/1/16
 3.) Use of variable names, s_ij
 4.) Sampling procedure... want to avoid LD [Results seemed to be similar whether done via spaced sampling or complete sampling]
 5.) Confirm probability of IBD is equivalent to coefficient of kinship.
-6.) Deviating from refering to statistic as "Jaccard" because although it started out that way it has evolved away from it and using that name may be confusing.
+6.) Deviating from refering to statistic as "Jaccard" or "weighted Jaccard" because although it started out that way it has evolved away from it and using that name may be confusing.
+7.) Writing an R package.  Will take a bit of work refactoring and everything, but I've done it before...
