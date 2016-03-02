@@ -60,6 +60,7 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     
     saveRDS(s.i.j, paste0("./plots/s_distributions/plotdata/",paste0(subpop,collapse="_"),"_sij_hap.rds"))
     saveRDS(s.i.j.dip, paste0("./plots/s_distributions/plotdata/",paste0(subpop,collapse="_"),"_sij_dip.rds"))
+    saveRDS(varcovMat, paste0("./plots/s_distributions/plotdata/",paste0(subpop,collapse="_"),"_varcovMat.rds"))
     list(s_i_j = s.i.j.dip, varcovMat=varcovMat)
 }
 plotFromGSM <- function(subpop, gsm, varS, kinship, sample_IDs, plotname="", alpha=.01){
@@ -94,17 +95,19 @@ plotFromGSM <- function(subpop, gsm, varS, kinship, sample_IDs, plotname="", alp
     dipPlot <- ggplot(plotData, aes(values)) + 
         geom_histogram(color="blue",binwidth=.01,fill=I("blue")) + 
         ggtitle(paste0(subpop,collapse="_"))  + xlab("Similarity score") + 
+        scale_x_continuous(limits=c(0, maxDip+1)) +
+        theme_bw() +
         theme(plot.title = element_text(size=40), axis.title.x = element_text(size = 10), axis.title.y = element_blank(), axis.text.y=element_blank()) + 
         
         geom_vline(xintercept = bonferroni_cutoff_dip, color="red", linetype="dotted") + 
-        geom_vline(aes(xintercept = maxDip), color="blue", linetype="dotted") + 
+        geom_vline(data=subset(plotData, (values == maxDip & values>bonferroni_cutoff_dip)),aes(xintercept = values), color="blue", linetype="dotted") + 
         geom_vline(xintercept = median(gsm[row(gsm)!=col(gsm)]), color="red", linetype=1) + 
         
         geom_text(data=subset(plotData, values > bonferroni_cutoff_dip), aes(values,label=pairs), y=0, angle = 80, hjust=0, size=3) +
-        geom_text(data=subset(plotData, values == maxDip), x=maxDip, y=Inf, label=paste0("hat(phi)==", round(topValuesKinship[1],3),"  "),parse = TRUE, color="blue", angle = 0, size = 5, vjust = 1, hjust = 1) +
+        geom_text(data=subset(plotData, (values == maxDip & values>bonferroni_cutoff_dip)), x=maxDip, y=Inf, label=paste0("hat(phi)==", round(topValuesKinship[1],3),"  "),parse = TRUE, color="blue", angle = 0, size = 3, vjust = 1, hjust = 0) +
         
-        annotate("text", x=bonferroni_cutoff_dip, y=Inf, label=paste0("Multiple testing cutoff, p=",format(alpha/num_comparisons_dip, digits=1),"        "), color="red", angle = 90, size = 3, vjust = 1, hjust = 1) +
-        annotate("text", x=median(gsm[row(gsm)!=col(gsm)]), y=Inf, label=paste0("Median=",round(median(gsm[row(gsm)!=col(gsm)]),3),"   "), color="red", angle = 90, size = 3, vjust = 1, hjust = 1) 
+        annotate("text", x=bonferroni_cutoff_dip, y=Inf, label=paste0("alpha==",format(alpha/num_comparisons_dip, digits=1)),parse = TRUE, color="red", angle = 0, size = 3, vjust = 1, hjust = 1) +
+        annotate("text", x=median(gsm[row(gsm)!=col(gsm)]), y=Inf, label=paste0("m=",round(median(gsm[row(gsm)!=col(gsm)]),3)," "), color="red", angle = 0, size = 3, vjust = 1, hjust = 0) 
     
     
     
