@@ -1,14 +1,18 @@
 library(ggplot2)
 
-
+genotypeFile <- "./data/1000GP_Phase3_chr10.hap.gz"
 genotypeFile <- "./data/combinedFiltered1000.gz"
 numberOfLines <- 5000
 minVariants <- 10
+numCores <- 4
 args<-commandArgs(TRUE)
 if(length(args)!=0){
     genotypeFile <- args[1]
     numberOfLines <- as.numeric(args[2])
     minVariants <- as.numeric(args[3])
+    numCores <- as.numeric(args[4])
+    outputDir <- args[5]
+    dir.create(paste0("~/1000GP/plots/s_distributions/",outputDir))
 }
 
 #### Simulated data
@@ -35,30 +39,42 @@ source('~/1000GP/s_matrix_functions.R')
 library(foreach)
 library(doParallel)
 
-num_cores <- 4 #detectCores() - 4
-
 # Initiate cluster
-if(!is.na(num_cores)){
-    cl <- makeCluster(num_cores)
+if(!is.na(numCores)){
+    cl <- makeCluster(numCores)
     registerDoParallel(cl)
 }
 
+# Calculate all the s matrices and save
 res <- foreach(pop_i=unique(pop),.packages=c("ggplot2")) %dopar% {
     result <- calculateSMatrix(pop_i, filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants)
-    saveRDS(result,paste0("./plots/s_distributions/plotdata/",pop_i, "_data.rds"))
-    plotFromGSM(pop_i, result$s_matrix_dip, result$var_s_dip, result$weightsMean, sampleIDs[pop%in%pop_i], "diploid")
-}
-sapply(unique(pop),function(pop_i)){
-    result <- readRDS(paste0("./plots/s_distributions/plotdata/",pop_i, "_data.rds"))
-    plotFromGSM(pop_i, result$s_matrix_dip, result$var_s_dip, result$weightsMean, sampleIDs[pop%in%pop_i], "diploid")
-    s_vector <- result$s_matrix_dip[row(result$s_matrix_dip)>col(result$s_matrix_dip)]
-    binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
+    saveRDS(result,paste0("./plots/s_distributions/",outputDir,"plotdata/",pop_i, "_data.rds"))
 }
 
+print(Sys.time()-strt)
+if(!is.na(numCores)){
+    stopCluster(cl)
+}
+# Read in all the results. plot histograms.  Calculated structure p.value
+sapply(unique(pop),function(pop_i){
+    result <- readRDS(paste0("./plots/s_distributions/",outputDir,"plotdata/",pop_i, "_data.rds"))
+    plotFromGSM(pop_i, result$s_matrix_dip, result$var_s_dip, result$weightsMean, sampleIDs[pop%in%pop_i], "diploid", outputDir=outputDir)
+    s_vector <- result$s_matrix_dip[row(result$s_matrix_dip)>col(result$s_matrix_dip)]
+    btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
+}
+
+# Same as function above, merge when ready
+p.values <- sapply(unique(pop),function(pop_i){
+    result <- readRDS(paste0("./plots/s_distributions/",outputDir,"plotdata/",pop_i, "_sij.rds"))
+    s_vector <- result$s_matrix_dip[row(result$s_matrix_dip)>col(result$s_matrix_dip)]
+    topValuesKinship <- (sort(s_vector, decreasing=T)-1)/(result$weightsMean-1)
+    btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
+    btest$p.value
+})
 # res <- calculateSMatrix(unique(pop), filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants)
 # res <- calculateSMatrix("CEU", filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants)
 
-# res <- readRDS('~/1000GP/plots/s_distributions/plotdata/allSamples_sij_80695.rds')
+# res <- readRDS('~/1000GP/plots/s_distributions/",outputDir,"plotdata/allSamples_sij_80695.rds')
 # allSamplesGSM <- res[['s_i_j']]
 # varcovMat <- res[['varcovMat']]
 # 
@@ -69,8 +85,3 @@ sapply(unique(pop),function(pop_i)){
 # pdf('~/1000GP/plots/varcov_matrix.pdf', width=9, height=9)
 # plotHeatmap(varcovMat,title="varcov GSM")
 # dev.off()
-
-print(Sys.time()-strt)
-if(!is.na(num_cores)){
-    stopCluster(cl)
-}

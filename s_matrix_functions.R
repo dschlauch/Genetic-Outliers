@@ -51,7 +51,7 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
 
     list(s_matrix_dip=s_matrix_dip, s_matrix_hap=s_matrix_hap, weightsMean=meanOfWeights, var_s_dip=var_s_dip, var_s_hap=var_s_hap, varcovMat=varcovMat)
 }
-plotFromGSM <- function(subpop, gsm, var_s, weightsMean, sample_IDs, plotname="", alpha=.01){
+plotFromGSM <- function(subpop, gsm, var_s, weightsMean, sample_IDs, plotname="", outputDir=".",alpha=.01){
     print(mean(gsm[row(gsm)!=col(gsm)]))
     print(median(gsm[row(gsm)!=col(gsm)]))
     num_comparisons_dip <- choose(ncol(gsm),2)
@@ -87,7 +87,7 @@ plotFromGSM <- function(subpop, gsm, var_s, weightsMean, sample_IDs, plotname=""
     
     
     
-    pdf(paste0("./plots/s_distributions/",paste0(subpop,collapse="_"), plotname, ".pdf"), width=4, height=4)
+    pdf(paste0("./plots/s_distributions/",outputDir,"/",paste0(subpop,collapse="_"), plotname, ".pdf"), width=4, height=4)
     print(dipPlot)
     dev.off()
 }
