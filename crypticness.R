@@ -2,7 +2,7 @@ library(ggplot2)
 
 genotypeFile <- "./data/1000GP_Phase3_chr10.hap.gz"
 genotypeFile <- "./data/combinedFiltered1000.gz"
-numberOfLines <- 5000
+numberOfLines <- 1000
 minVariants <- 10
 numCores <- 4
 args<-commandArgs(TRUE)
@@ -13,6 +13,7 @@ if(length(args)!=0){
     numCores <- as.numeric(args[4])
     outputDir <- args[5]
     dir.create(paste0("~/1000GP/plots/s_distributions/",outputDir))
+    dir.create(paste0("~/1000GP/plots/s_distributions/",outputDir,"/plotdata"))
 }
 
 #### Simulated data
@@ -45,10 +46,11 @@ if(!is.na(numCores)){
     registerDoParallel(cl)
 }
 
+strt <- Sys.time()
 # Calculate all the s matrices and save
 res <- foreach(pop_i=unique(pop),.packages=c("ggplot2")) %dopar% {
     result <- calculateSMatrix(pop_i, filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants)
-    saveRDS(result,paste0("./plots/s_distributions/",outputDir,"plotdata/",pop_i, "_data.rds"))
+    saveRDS(result, paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))
 }
 
 print(Sys.time()-strt)
@@ -57,20 +59,20 @@ if(!is.na(numCores)){
 }
 # Read in all the results. plot histograms.  Calculated structure p.value
 sapply(unique(pop),function(pop_i){
-    result <- readRDS(paste0("./plots/s_distributions/",outputDir,"plotdata/",pop_i, "_data.rds"))
+    result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))
     plotFromGSM(pop_i, result$s_matrix_dip, result$var_s_dip, result$weightsMean, sampleIDs[pop%in%pop_i], "diploid", outputDir=outputDir)
-    s_vector <- result$s_matrix_dip[row(result$s_matrix_dip)>col(result$s_matrix_dip)]
-    btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
-}
-
-# Same as function above, merge when ready
-p.values <- sapply(unique(pop),function(pop_i){
-    result <- readRDS(paste0("./plots/s_distributions/",outputDir,"plotdata/",pop_i, "_sij.rds"))
     s_vector <- result$s_matrix_dip[row(result$s_matrix_dip)>col(result$s_matrix_dip)]
     topValuesKinship <- (sort(s_vector, decreasing=T)-1)/(result$weightsMean-1)
     btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
     btest$p.value
 })
+
+# # Same as function above, merge when ready
+# p.values <- sapply(unique(pop),function(pop_i){
+#     result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_sij.rds"))
+#     s_vector <- result$s_matrix_dip[row(result$s_matrix_dip)>col(result$s_matrix_dip)]
+#     
+# })
 # res <- calculateSMatrix(unique(pop), filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants)
 # res <- calculateSMatrix("CEU", filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants)
 
