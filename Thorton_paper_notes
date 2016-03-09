@@ -1,0 +1,13 @@
+1.) Assumes independence of SNPs (does not consider LD?)
+	"We assume that the correlation structure is the same across SNPs"
+2.) Focused on ad-mixed populations
+	Populations can be admixed but also homogeneous
+3.) Used HapMap data...
+	Included a number of known related individuals, which are missing from my data
+4.) Of unknown individuals, a lot of overlap
+	Examples:
+		NA19679 NA19652 not found to be related by Thorton
+		NA19657 NA19786 3rd degree -kinship=0.0625 for Thorton for our method, approx 0.01 for us
+5.) Estimated relatedness appears to be consistently higher for Thorton, and I am looking into the possibility that I made a calculation error in my code.
+
+

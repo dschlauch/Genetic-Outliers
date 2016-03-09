@@ -15,6 +15,19 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     sumVariants <- rowSums(genotypes)
     # remove < n variants
     genotypes <- genotypes[sumVariants>minVariants,]
+    
+#     ################### Toggle this.  Adds a related individual for testing ################
+#     coefR <- .1
+#     probs <- rep((1-2*coefR)/ncol(genotypes),ncol(genotypes))
+#     probs[1:2] <- probs[1:2]+coefR
+#     indices1 <- sample(ncol(genotypes), nrow(genotypes), prob=probs, replace=T)
+#     indices2 <- sample(ncol(genotypes), nrow(genotypes), prob=probs, replace=T)
+#     relatedHap1 <- mapply(function(x,y){genotypes[x,y]},1:nrow(genotypes),indices1)
+#     relatedHap2 <- mapply(function(x,y){genotypes[x,y]},1:nrow(genotypes),indices1)
+#     
+#     genotypes <- cbind(genotypes, relatedHap1, relatedHap2)
+#     ################################################
+    
     print("Number of used variants")
     print(nrow(genotypes))
     numFilteredVariants <- nrow(genotypes)

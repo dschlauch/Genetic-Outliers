@@ -57,15 +57,27 @@ print(Sys.time()-strt)
 if(!is.na(numCores)){
     stopCluster(cl)
 }
+
 # Read in all the results. plot histograms.  Calculated structure p.value
-sapply(unique(pop),function(pop_i){
+popResults <- as.data.framet(sapply(unique(pop),function(pop_i){
     result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))
-    plotFromGSM(pop_i, result$s_matrix_dip, result$var_s_dip, result$weightsMean, sampleIDs[pop%in%pop_i], "diploid", outputDir=outputDir)
+#     plotFromGSM(pop_i, result$s_matrix_dip, result$var_s_dip, result$weightsMean, sampleIDs[pop%in%pop_i], "diploid", outputDir=outputDir)
     s_vector <- result$s_matrix_dip[row(result$s_matrix_dip)>col(result$s_matrix_dip)]
     topValuesKinship <- (sort(s_vector, decreasing=T)-1)/(result$weightsMean-1)
     btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
-    btest$p.value
-})
+    c(structurePValue=btest$p.value, var_s=result$var_s_dip, sampleVariance=var(s_vector))
+})))
+popResults$pop <- unique(pop)
+ggplot(popResults, aes(y=structurePValue, x=pop))+ geom_point()
+ggplot(subset(popResults,!pop%in%c("PEL","MXL","ASW","PUR")), aes(y=var_s, x=sampleVariance, label=pop))+ geom_point(col="red", size=5) + geom_text(aes(y=var_s, x=sampleVariance))+ geom_abline() +
+    xlim(0,.005)+ylim(0,.005)
+cor(subset(popResults,!pop%in%c("PEL","MXL","ASW","PUR"))$sampleVariance,subset(popResults,!pop%in%c("PEL","MXL","ASW","PUR"))$var_s)
+varianceRatio <- popResults$sampleVariance/popResults$var_s
+names(varianceRatio)<-popResults$pop
+cbind(sort(varianceRatio, decreasing = TRUE))
+sum(popResults$structurePValue<.01)
+popResults$structurePValue[popResults$structurePValue<.01]
+
 
 # # Same as function above, merge when ready
 # p.values <- sapply(unique(pop),function(pop_i){

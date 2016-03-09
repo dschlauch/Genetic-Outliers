@@ -9,3 +9,9 @@ Discussion points 3/1/16
 7.) Should I Write an R package to submit to CRAN or Bioconductor?  Will take a bit of work refactoring and everything, but I've done it before...
 8.) Interesting new results: Calculated estimated kinship for "outliers".  Many pairs of subjects were found to have estimated kinship coefficient greater than second cousins.  Closest individuals were still more than cousins apart (phi<0.0625)
 9.) Expectation of s is clearly defined, yielding the ability to calculate power for s specific coefficient of relatedness.
+
+Post-meeting:
+- Send next draft before next meeting
+- Interval sampling is OK for LD.  Just explain
+- Explore why sample variance is larger than computed variance even in seemingly homogeneous populations.  Try pruning every 2000,10000...
+- Explore adding that ITU, STU pairing to each other's population

@@ -1,0 +1,4 @@
+1.) Assumes independence of SNPs (does not consider LD?)
+	"We assume that the correlation structure is the same across SNPs"
+2.) Focused on ad-mixed populations
+	Populations can be admixed but also homogeneous
