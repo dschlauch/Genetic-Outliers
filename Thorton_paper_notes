@@ -20,3 +20,4 @@ Pruning results:
 	Sweet spot involves sampling every 100th-1000th variant.  Perhaps we can get the best of both worlds by intelligently selecting variants in each block rather than randomly selecting (such as with MAF<.1 and >.01)
 
 Run on people moved around
+another line

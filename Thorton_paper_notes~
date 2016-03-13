@@ -18,3 +18,5 @@ Pruning results:
 	Less frequent sampling - 2000-10,000... yields greater variance.  This is due to the reduced sample sizes which impact ability to apply CLT
 	More frequent sampling - <100 yields greater variance as well.  This is likely due to LD.
 	Sweet spot involves sampling every 100th-1000th variant.  Perhaps we can get the best of both worlds by intelligently selecting variants in each block rather than randomly selecting (such as with MAF<.1 and >.01)
+
+Run on people moved around
