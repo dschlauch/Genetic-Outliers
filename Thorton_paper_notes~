@@ -2,3 +2,19 @@
 	"We assume that the correlation structure is the same across SNPs"
 2.) Focused on ad-mixed populations
 	Populations can be admixed but also homogeneous
+3.) Used HapMap data...
+	Included a number of known related individuals, which are missing from my data
+4.) Of unknown individuals, a lot of overlap
+	Examples:
+		NA19679 NA19652 not found to be related by Thorton
+		NA19657 NA19786 3rd degree -kinship=0.0625 for Thorton for our method, approx 0.01 for us
+5.) Estimated relatedness appears to be consistently higher for Thorton, and I am looking into the possibility that I made a calculation error in my code.
+
+More thoughts:
+manuscript is coming along
+Simulating related individuals... procedure OK? or should I instead simply use known related persons?
+Simulations indicating that I am underestimating relatedness.  Perhaps a bug in code?
+Pruning results:
+	Less frequent sampling - 2000-10,000... yields greater variance.  This is due to the reduced sample sizes which impact ability to apply CLT
+	More frequent sampling - <100 yields greater variance as well.  This is likely due to LD.
+	Sweet spot involves sampling every 100th-1000th variant.  Perhaps we can get the best of both worlds by intelligently selecting variants in each block rather than randomly selecting (such as with MAF<.1 and >.01)

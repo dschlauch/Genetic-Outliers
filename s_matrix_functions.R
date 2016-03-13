@@ -16,18 +16,29 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     # remove < n variants
     genotypes <- genotypes[sumVariants>minVariants,]
     
+    # Fully simulated ---------------------------------------------------------
+    numSamples <- 100
+    numVariants<- 100000
+    genotypes <- matrix(rbinom(numSamples*2*numVariants,1, .1), ncol=numSamples*2)
+    numSamples <- ncol(genotypes)
+    sumVariants <- rowSums(genotypes)
+    genotypes <- genotypes[sumVariants>5,]
+    subpop <- "Simulated"
+    sum(rowSums(genotypes)<2)    
 #     ################### Toggle this.  Adds a related individual for testing ################
-#     coefR <- .1
-#     probs <- rep((1-2*coefR)/ncol(genotypes),ncol(genotypes))
-#     probs[1:2] <- probs[1:2]+coefR
+    coefR <- .1
+    probs <- rep((1-2*coefR)/ncol(genotypes),ncol(genotypes))
+    probs[1:2] <- probs[1:2]+coefR
+    indices <- replicate(nrow(genotypes), {sample(ncol(genotypes),2 , prob=probs, replace=F)})
 #     indices1 <- sample(ncol(genotypes), nrow(genotypes), prob=probs, replace=T)
 #     indices2 <- sample(ncol(genotypes), nrow(genotypes), prob=probs, replace=T)
-#     relatedHap1 <- mapply(function(x,y){genotypes[x,y]},1:nrow(genotypes),indices1)
-#     relatedHap2 <- mapply(function(x,y){genotypes[x,y]},1:nrow(genotypes),indices1)
-#     
-#     genotypes <- cbind(genotypes, relatedHap1, relatedHap2)
+    relatedHap1 <- mapply(function(x,y){genotypes[x,y]},1:nrow(genotypes),indices[1,])
+    relatedHap2 <- mapply(function(x,y){genotypes[x,y]},1:nrow(genotypes),indices[2,])
+    genotypes <- cbind(genotypes, relatedHap1, relatedHap2)
 #     ################################################
-    
+
+
+
     print("Number of used variants")
     print(nrow(genotypes))
     numFilteredVariants <- nrow(genotypes)
@@ -43,9 +54,9 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     print(var_s_hap)
     
     # Calculate expected values conditional on kinship
-    meanOfWeights <- mean(weights)
+    pkweightsMean <- mean(((sumFilteredVariants-2)/numSamples)*weights)
     kinships <- seq(0,.25,.001)
-    kinshipExpectation <- 1+kinships*(meanOfWeights-1)
+    kinshipExpectation <- 1+kinships*(pkweightsMean-1)
         
     s_matrix_numerator <- t(genotypes*weights)%*%genotypes
     s_matrix_denominator <- numFilteredVariants
@@ -54,7 +65,7 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     print(mean(s_matrix_hap[row(s_matrix_hap)!=col(s_matrix_hap)]))
     print(median(s_matrix_hap[row(s_matrix_hap)!=col(s_matrix_hap)]))
     
-    estimatedKinship <- (s_matrix_hap-1)/(meanOfWeights-1)
+    estimatedKinship <- (s_matrix_hap-1)/(pkweightsMean-1)
     
     # Collapse to diploid
     s_matrix_dip <- (s_matrix_hap[c(T,F),c(T,F)] + s_matrix_hap[c(F,T),c(T,F)] +s_matrix_hap[c(T,F),c(F,T)] + s_matrix_hap[c(F,T),c(F,T)])/4
@@ -62,9 +73,25 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     var_s_dip <- var_s_hap/4
     
 
-    list(s_matrix_dip=s_matrix_dip, s_matrix_hap=s_matrix_hap, weightsMean=meanOfWeights, var_s_dip=var_s_dip, var_s_hap=var_s_hap, varcovMat=varcovMat)
+    list(s_matrix_dip=s_matrix_dip, s_matrix_hap=s_matrix_hap, pkweightsMean=pkweightsMean, var_s_dip=var_s_dip, var_s_hap=var_s_hap, varcovMat=varcovMat)
+    
+
+# For sim -----------------------------------------------------------------
+
+var_s <- var_s_dip
+gsm <- s_matrix_dip
+sample_IDs <- paste0("Sample",1:ncol(gsm))
+sample_IDs[length(sample_IDs)] <- "Related"
+
+var_s <- var_s_hap
+gsm <- s_matrix_hap
+sample_IDs <- paste0("Sample",1:ncol(gsm))
+sample_IDs[c(length(sample_IDs),length(sample_IDs)-1)] <- "Related"
+
+alpha=.01
+
 }
-plotFromGSM <- function(subpop, gsm, var_s, weightsMean, sample_IDs, plotname="", outputDir=".",alpha=.01){
+plotFromGSM <- function(subpop, gsm, var_s, pkweightsMean, sample_IDs, plotname="", outputDir=".",alpha=.01){
     print(mean(gsm[row(gsm)!=col(gsm)]))
     print(median(gsm[row(gsm)!=col(gsm)]))
     num_comparisons_dip <- choose(ncol(gsm),2)
@@ -72,7 +99,7 @@ plotFromGSM <- function(subpop, gsm, var_s, weightsMean, sample_IDs, plotname=""
     bonferroni_cutoff_dip <- qnorm((1-alpha)^(1/num_comparisons_dip), sd=sqrt(var_s)) + 1
     
     topValuesDip <- sort(gsm[row(gsm)>col(gsm)], decreasing=T)
-    topValuesKinship <- (topValuesDip-1)/(weightsMean-1)
+    topValuesKinship <- (topValuesDip-1)/(pkweightsMean-1)
     
     # Display only those that are above the cutoff and among the top 5
     label_cutoff <- max(bonferroni_cutoff_dip, topValuesDip[5])
