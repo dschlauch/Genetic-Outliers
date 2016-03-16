@@ -1,19 +1,35 @@
 library(ggplot2)
+library(reshape2)
+library(data.table)
 
-genotypeFile <- "./data/1000GP_Phase3_chr10.hap.gz"
+#outputDir <- "filtered1000_fixed_phi"
+#genotypeFile <- "./data/1000GP_Phase3_chr10.hap.gz"
 genotypeFile <- "./data/combinedFiltered1000.gz"
-numberOfLines <- 1000
+numberOfLines <- 5000
 minVariants <- 10
 numCores <- 4
 args<-commandArgs(TRUE)
+outputDir <- '.'
+gazalFilter <- "NA"
+
 if(length(args)!=0){
     genotypeFile <- args[1]
     numberOfLines <- as.numeric(args[2])
     minVariants <- as.numeric(args[3])
     numCores <- as.numeric(args[4])
     outputDir <- args[5]
+    gazalFilter <- args[6]
     dir.create(paste0("~/1000GP/plots/s_distributions/",outputDir))
     dir.create(paste0("~/1000GP/plots/s_distributions/",outputDir,"/plotdata"))
+}
+
+# incorporating gazal filtering -------------------------------------------
+if(gazalFilter!="NA"){
+    gazal_filtered <- read.csv("./data/gazal_filtered.csv",stringsAsFactors=F)
+    gazal_filtered <- gazal_filtered[order(gazal_filtered[,1]),]
+    qcFilter <- gazal_filtered[,gazalFilter]=="YES"    
+} else {
+    qcFilter <- NULL
 }
 
 #### Simulated data
@@ -49,7 +65,7 @@ if(!is.na(numCores)){
 strt <- Sys.time()
 # Calculate all the s matrices and save
 res <- foreach(pop_i=unique(pop),.packages=c("ggplot2")) %dopar% {
-    result <- calculateSMatrix(pop_i, filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants)
+    result <- calculateSMatrix(pop_i, filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune=T)
     saveRDS(result, paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))
 }
 
@@ -59,9 +75,9 @@ if(!is.na(numCores)){
 }
 
 # Read in all the results. plot histograms.  Calculated structure p.value
-popResults <- as.data.framet(sapply(unique(pop),function(pop_i){
-    result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))
-#     plotFromGSM(pop_i, result$s_matrix_dip, result$var_s_dip, result$weightsMean, sampleIDs[pop%in%pop_i], "diploid", outputDir=outputDir)
+popResults <- as.data.frame(t(sapply(unique(pop),function(pop_i){
+    result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))     
+    plotFromGSM(subpop=pop_i, gsm=result$s_matrix_dip, var_s=result$var_s_dip, pkweightsMean=result$pkweightsMean, "diploid", outputDir=outputDir)
     s_vector <- result$s_matrix_dip[row(result$s_matrix_dip)>col(result$s_matrix_dip)]
     topValuesKinship <- (sort(s_vector, decreasing=T)-1)/(result$weightsMean-1)
     btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
@@ -77,25 +93,43 @@ names(varianceRatio)<-popResults$pop
 cbind(sort(varianceRatio, decreasing = TRUE))
 sum(popResults$structurePValue<.01)
 popResults$structurePValue[popResults$structurePValue<.01]
+popResults$pop[popResults$structurePValue<.01]
+popResults <- popResults[order(popResults$structurePValue),]
 
 
-# # Same as function above, merge when ready
-# p.values <- sapply(unique(pop),function(pop_i){
-#     result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_sij.rds"))
-#     s_vector <- result$s_matrix_dip[row(result$s_matrix_dip)>col(result$s_matrix_dip)]
-#     
-# })
-# res <- calculateSMatrix(unique(pop), filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants)
-# res <- calculateSMatrix("CEU", filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants)
+# generate summary table --------------------------------------------------
+# outputDir <- "filtered1000_fixed_phi"
+resTableAll <- data.table(do.call(rbind, lapply(unique(pop),function(pop_i){
+    result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))
+    
+    result$s_matrix_dip[upper.tri(result$s_matrix_dip)] <- NA
+    diag(result$s_matrix_dip) <- NA
+    resTable <- melt(result$s_matrix_dip, na.rm=T)
+    resTable$estimatedCoK <- (resTable$value-1)/(result$pkweightsMean-1)
+    resTable$pop <- pop_i
+    colnames(resTable) <- c("SampleID_1","SampleID_2","s","CoK","pop")
+    resTable
+})))
 
-# res <- readRDS('~/1000GP/plots/s_distributions/",outputDir,"plotdata/allSamples_sij_80695.rds')
-# allSamplesGSM <- res[['s_i_j']]
-# varcovMat <- res[['varcovMat']]
-# 
-# pdf('~/1000GP/plots/s_matrix.pdf', width=9, height=9)
-# plotHeatmap(allSamplesGSM, title="s GSM")
-# dev.off()
-# 
-# pdf('~/1000GP/plots/varcov_matrix.pdf', width=9, height=9)
-# plotHeatmap(varcovMat,title="varcov GSM")
-# dev.off()
+gazal_related <- read.csv("./data/gazal_related.csv")
+gazal_related <- data.table(gazal_related)
+gazal_related_rev <- copy(gazal_related)
+setcolorder(gazal_related_rev, c(2,1,3,4,5))
+names(gazal_related_rev)[1:2] <- names(gazal_related_rev)[2:1]
+gazal_related <- rbind(gazal_related,gazal_related_rev)
+names(gazal_related)[1:2] <- names(resTableAll)[1:2]
+resTableAll <- merge(resTableAll,gazal_related, by=names(gazal_related)[1:2],all.x=T)
+resTableAll[order(-CoK)]
+sum(!is.na(resTableAll[,INFERED.RELATIONSHIP]))
+resTableAll[SampleID_1=="HG00100"]
+resTableAll[is.na(resTableAll[["INFERED.RELATIONSHIP"]]),"INFERED.RELATIONSHIP"]<- "Unrelated"
+resTableAll$CombinedInfered <- "Unrelated"
+resTableAll$CombinedInfered[resTableAll$INFERED.RELATIONSHIP=="CO"] <- "CO"
+resTableAll$CombinedInfered[resTableAll$INFERED.RELATIONSHIP=="AV"|resTableAll$INFERED.RELATIONSHIP=="HS"] <- "AV or HS"
+resTableAll$CombinedInfered[resTableAll$INFERED.RELATIONSHIP=="FS"|resTableAll$INFERED.RELATIONSHIP=="PO"] <- "FS or PO"
+ggplot(resTableAll, aes(CombinedInfered, CoK)) +
+    geom_jitter(aes(alpha=(INFERED.RELATIONSHIP!="Unrelated")*.02)) + scale_x_discrete(limits=levels(resTableAll$INFERED.RELATIONSHIP)[c(6,2,1,4,3,5)])
+ggplot(resTableAll, aes(INFERED.RELATIONSHIP, CoK)) +
+    geom_boxplot() + scale_x_discrete(limits=levels(resTableAll$INFERED.RELATIONSHIP)[c(6,2,1,4,3,5)]) +xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship")
+ggplot(resTableAll, aes(CombinedInfered, CoK)) + theme_bw() +
+    geom_boxplot() + scale_x_discrete(limits=c("Unrelated","CO","AV or HS", "FS or PO")) +xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship")
