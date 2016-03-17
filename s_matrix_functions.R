@@ -16,9 +16,10 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     hapsampleNames <- hap.sampleIDs[filterhap]
     dipsampleNames <- sampleIDs[filterdip]
     
-    con <- file(filename, "rt")
-    system.time(genotypes <- apply(do.call(cbind, strsplit(readLines(con, numberOfLines)," ")), 1,as.numeric)[,filterhap])
-    close(con)
+    # Old reader
+#     con <- file(filename, "rt")
+#     system.time(genotypes <- apply(do.call(cbind, strsplit(readLines(con, numberOfLines)," ")), 1,as.numeric)[,filterhap])
+#     close(con)
     
     system.time(genotypes <- fread(paste('zcat',filename), sep=" ", nrows=numberOfLines, header=F)[,filterhap,with=F])
 
@@ -33,7 +34,7 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     # Intelligently LD prune
     numblocks <- numVariants/ldPrune +1
     blocks <- rep(1:numblocks, each=ldPrune)[1:numVariants]
-    genotypes <- genotypes[, .SD[which.min(abs(rowSums(.SD)-10))], by=blocks]
+    system.time(genotypes <- genotypes[, .SD[which.max(rowSums(.SD))], by=blocks])
     genotypes[,blocks:=NULL]
     
     # remove < n variants

@@ -10,8 +10,9 @@ minVariants <- 10
 numCores <- 4
 args<-commandArgs(TRUE)
 outputDir <- '.'
+# gazalFilter <-"TGP2261"
 gazalFilter <- "NA"
-
+ldPrune <- 1
 if(length(args)!=0){
     genotypeFile <- args[1]
     numberOfLines <- as.numeric(args[2])
@@ -19,27 +20,19 @@ if(length(args)!=0){
     numCores <- as.numeric(args[4])
     outputDir <- args[5]
     gazalFilter <- args[6]
+    ldPrune <- as.numeric(args[7])
     dir.create(paste0("~/1000GP/plots/s_distributions/",outputDir))
     dir.create(paste0("~/1000GP/plots/s_distributions/",outputDir,"/plotdata"))
 }
 
 # incorporating gazal filtering -------------------------------------------
-if(gazalFilter!="NA"){
+if(gazalFilter=="NA"|is.na(gazalFilter)){
+    qcFilter <- NULL
+} else {
     gazal_filtered <- read.csv("./data/gazal_filtered.csv",stringsAsFactors=F)
     gazal_filtered <- gazal_filtered[order(gazal_filtered[,1]),]
     qcFilter <- gazal_filtered[,gazalFilter]=="YES"    
-} else {
-    qcFilter <- NULL
 }
-
-#### Simulated data
-# simn <- 3000
-# numVariants <- 100000
-# sim.w.numerator <- 2*(2*simn-1)
-# simMAF <- runif(numVariants,0,.5)
-# genotypes <- sapply(1:simn,function(x){
-#     rbinom(numVariants,1,simMAF)
-# })
 
 # Real data
 sample <- read.table("~/1000GP/data/1000GP_Phase3.sample", sep=" ", header=T)
@@ -49,6 +42,10 @@ group <- as.character(sample[,3])
 sex <- as.character(sample[,4])
 hap.pop <- rep(pop,each=2)
 hap.sampleIDs <- rep(as.character(sample[,1]),each=2)
+
+popGroup <- melt(table(pop,group))
+popGroup <- popGroup[popGroup$value>0,]
+rownames(popGroup) <- popGroup$pop
 
 source('~/1000GP/s_matrix_functions.R')
 
@@ -64,8 +61,8 @@ if(!is.na(numCores)){
 
 strt <- Sys.time()
 # Calculate all the s matrices and save
-res <- foreach(pop_i=unique(pop),.packages=c("ggplot2")) %dopar% {
-    result <- calculateSMatrix(pop_i, filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune=T)
+res <- foreach(pop_i=unique(pop),.packages=c("ggplot2","data.table","reshape2")) %dopar% {
+    result <- calculateSMatrix(pop_i, filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune=10)
     saveRDS(result, paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))
 }
 
@@ -75,30 +72,54 @@ if(!is.na(numCores)){
 }
 
 # Read in all the results. plot histograms.  Calculated structure p.value
-popResults <- as.data.frame(t(sapply(unique(pop),function(pop_i){
+
+# outputDir <- "filtered99_TGP2261_LD10"
+# outputDir <- "filtered99_LD10"
+
+
+# Generate Plots ----------------------------------------------------------
+
+sapply(unique(pop),function(pop_i){
+    result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))   
+    s_vector <- result$s_matrix_dip[row(result$s_matrix_dip)>col(result$s_matrix_dip)] 
+    plotFromGSM(subpop=pop_i, gsm=result$s_matrix_dip, var_s=var(s_vector), pkweightsMean=result$pkweightsMean, "diploid", outputDir=outputDir)
+})
+
+
+# Calculate structure significance ----------------------------------------
+
+popResults <- as.data.table(t(sapply(unique(pop),function(pop_i){
     result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))     
-    plotFromGSM(subpop=pop_i, gsm=result$s_matrix_dip, var_s=result$var_s_dip, pkweightsMean=result$pkweightsMean, "diploid", outputDir=outputDir)
     s_vector <- result$s_matrix_dip[row(result$s_matrix_dip)>col(result$s_matrix_dip)]
     topValuesKinship <- (sort(s_vector, decreasing=T)-1)/(result$weightsMean-1)
     btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
     c(structurePValue=btest$p.value, var_s=result$var_s_dip, sampleVariance=var(s_vector))
-})))
-popResults$pop <- unique(pop)
-ggplot(popResults, aes(y=structurePValue, x=pop))+ geom_point()
-ggplot(subset(popResults,!pop%in%c("PEL","MXL","ASW","PUR")), aes(y=var_s, x=sampleVariance, label=pop))+ geom_point(col="red", size=5) + geom_text(aes(y=var_s, x=sampleVariance))+ geom_abline() +
-    xlim(0,.005)+ylim(0,.005)
+})), keep.rownames=T)
+
+
+# tidy up and plot structure results --------------------------------------
+
+names(popResults)[1] <- "pop"
+popResults$group <- popGroup[popResults$pop,"group"] 
+pdf(paste0("./plots/s_distributions/",outputDir,"/pValueForPop.pdf"), width=8, height=8)
+ggplot(popResults, aes(y=structurePValue, x=pop))+ geom_point(aes(color=group)) + geom_hline(yintercept=.05) + geom_hline(yintercept=.01) +
+    ggtitle("p-value for structure in each population") + theme_bw() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+dev.off()
+# ggplot(subset(popResults,!pop%in%c("PEL","MXL","ASW","PUR")), aes(y=var_s, x=sampleVariance, label=pop))+ geom_point(col="red", size=5) + geom_text(aes(y=var_s, x=sampleVariance))+ geom_abline() +
+#     xlim(0,.005)+ylim(0,.005)
 cor(subset(popResults,!pop%in%c("PEL","MXL","ASW","PUR"))$sampleVariance,subset(popResults,!pop%in%c("PEL","MXL","ASW","PUR"))$var_s)
 varianceRatio <- popResults$sampleVariance/popResults$var_s
 names(varianceRatio)<-popResults$pop
 cbind(sort(varianceRatio, decreasing = TRUE))
 sum(popResults$structurePValue<.01)
 popResults$structurePValue[popResults$structurePValue<.01]
-popResults$pop[popResults$structurePValue<.01]
 popResults <- popResults[order(popResults$structurePValue),]
+structuredPops <- popResults$pop[popResults$structurePValue<.05]
 
 
 # generate summary table --------------------------------------------------
-# outputDir <- "filtered1000_fixed_phi"
+
 resTableAll <- data.table(do.call(rbind, lapply(unique(pop),function(pop_i){
     result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))
     
@@ -119,7 +140,7 @@ names(gazal_related_rev)[1:2] <- names(gazal_related_rev)[2:1]
 gazal_related <- rbind(gazal_related,gazal_related_rev)
 names(gazal_related)[1:2] <- names(resTableAll)[1:2]
 resTableAll <- merge(resTableAll,gazal_related, by=names(gazal_related)[1:2],all.x=T)
-resTableAll[order(-CoK)]
+resTableAll$group <- popGroup[resTableAll$pop,"group"]
 sum(!is.na(resTableAll[,INFERED.RELATIONSHIP]))
 resTableAll[SampleID_1=="HG00100"]
 resTableAll[is.na(resTableAll[["INFERED.RELATIONSHIP"]]),"INFERED.RELATIONSHIP"]<- "Unrelated"
@@ -127,9 +148,18 @@ resTableAll$CombinedInfered <- "Unrelated"
 resTableAll$CombinedInfered[resTableAll$INFERED.RELATIONSHIP=="CO"] <- "CO"
 resTableAll$CombinedInfered[resTableAll$INFERED.RELATIONSHIP=="AV"|resTableAll$INFERED.RELATIONSHIP=="HS"] <- "AV or HS"
 resTableAll$CombinedInfered[resTableAll$INFERED.RELATIONSHIP=="FS"|resTableAll$INFERED.RELATIONSHIP=="PO"] <- "FS or PO"
+resTableAll[order(-CoK)]
 ggplot(resTableAll, aes(CombinedInfered, CoK)) +
     geom_jitter(aes(alpha=(INFERED.RELATIONSHIP!="Unrelated")*.02)) + scale_x_discrete(limits=levels(resTableAll$INFERED.RELATIONSHIP)[c(6,2,1,4,3,5)])
 ggplot(resTableAll, aes(INFERED.RELATIONSHIP, CoK)) +
     geom_boxplot() + scale_x_discrete(limits=levels(resTableAll$INFERED.RELATIONSHIP)[c(6,2,1,4,3,5)]) +xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship")
+pdf(paste0("./plots/s_distributions/",outputDir,"/EstimatedCoKvsGazal.pdf"), width=8, height=8)
 ggplot(resTableAll, aes(CombinedInfered, CoK)) + theme_bw() +
-    geom_boxplot() + scale_x_discrete(limits=c("Unrelated","CO","AV or HS", "FS or PO")) +xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship")
+    geom_boxplot() + geom_jitter(aes(color=group), alpha=.5) + scale_x_discrete(limits=c("Unrelated","CO","AV or HS", "FS or PO")) +
+    xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship") + ggtitle("Our estimated CoK vs Inferred Relationship (Gazal 2015)")
+dev.off()
+
+ggplot(subset(resTableAll, !pop%in%structuredPops), aes(CombinedInfered, CoK)) + theme_bw() +
+    geom_boxplot() + geom_jitter(aes(color=group), alpha=.5) + scale_x_discrete(limits=c("Unrelated","CO","AV or HS", "FS or PO")) +
+    xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship") + ggtitle("Our estimated CoK vs Inferred Relationship (Gazal 2015)")
+
