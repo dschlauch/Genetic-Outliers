@@ -54,22 +54,22 @@ library(foreach)
 library(doParallel)
 
 # Initiate cluster
-if(!is.na(numCores)){
-    cl <- makeCluster(numCores)
-    registerDoParallel(cl)
-}
+# if(!is.na(numCores)){
+#     cl <- makeCluster(numCores)
+#     registerDoParallel(cl)
+# }
 
 strt <- Sys.time()
 # Calculate all the s matrices and save
-res <- foreach(pop_i=unique(pop),.packages=c("ggplot2","data.table","reshape2")) %dopar% {
-    result <- calculateSMatrix(pop_i, filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune=10)
-    saveRDS(result, paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))
-}
+# res <- foreach(pop_i=unique(pop),.packages=c("ggplot2","data.table","reshape2")) %dopar% {
+    result <- calculateSMatrix(pop_i, filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune)
+    saveRDS(result, paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
+# }
 
 print(Sys.time()-strt)
-if(!is.na(numCores)){
-    stopCluster(cl)
-}
+# if(!is.na(numCores)){
+#     stopCluster(cl)
+# }
 
 # Read in all the results. plot histograms.  Calculated structure p.value
 

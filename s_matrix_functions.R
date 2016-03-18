@@ -1,7 +1,12 @@
 calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000.gz", numberOfLines=40695, minVariants=5, qcFilter=NULL, ldPrune=1){
-    require(readr)
-    print(subpop)
+
+    system.time(genotypes <- fread(paste('zcat',filename), sep=" ", nrows=numberOfLines, header=F))
     
+    lapply(unique(pop), generateSResultsFromGenotypes, genotypes, qcFilter, ldPrune)
+}
+
+generateSResultsFromGenotypes <- function(subpop, genotypes, qcFilter, ldPrune=1){
+
     if(is.null(qcFilter)){
         filterhap <- hap.pop%in%subpop
         filterdip <- pop%in%subpop 
@@ -17,9 +22,9 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     dipsampleNames <- sampleIDs[filterdip]
     
     # Test branch line
+    genotypes <- genotypes[,filterhap, with=F]
     
-    system.time(genotypes <- fread(paste('zcat',filename), sep=" ", nrows=numberOfLines, header=F)[,filterhap,with=F])
-
+    
     numSamples <- ncol(genotypes)
     numVariants <- nrow(genotypes)
     sumVariants <- rowSums(genotypes)
@@ -27,12 +32,14 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     
     # reverse so that MAF<.5
     genotypes[sumVariants>(numSamples/2),] <- 1-genotypes[sumVariants>(numSamples/2),]
+    sumVariants <- rowSums(genotypes)
     
     # Intelligently LD prune
     numblocks <- numVariants/ldPrune +1
     blocks <- rep(1:numblocks, each=ldPrune)[1:numVariants]
-    system.time(genotypes <- genotypes[, .SD[which.max(rowSums(.SD))], by=blocks])
-    genotypes[,blocks:=NULL]
+    
+    system.time(genotypes <- genotypes[sapply(unique(blocks), function(x) {ldPrune*(x-1)+which.max(sumVariants[blocks==x])})])
+#     genotypes[,blocks:=NULL]
     
     # remove < n variants
     sumVariants <- rowSums(genotypes)
