@@ -16,10 +16,7 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     hapsampleNames <- hap.sampleIDs[filterhap]
     dipsampleNames <- sampleIDs[filterdip]
     
-    # Old reader
-#     con <- file(filename, "rt")
-#     system.time(genotypes <- apply(do.call(cbind, strsplit(readLines(con, numberOfLines)," ")), 1,as.numeric)[,filterhap])
-#     close(con)
+    # Test branch line
     
     system.time(genotypes <- fread(paste('zcat',filename), sep=" ", nrows=numberOfLines, header=F)[,filterhap,with=F])
 
