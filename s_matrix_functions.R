@@ -1,78 +1,87 @@
 calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000.gz", numberOfLines=40695, minVariants=5, qcFilter=NULL, ldPrune=1){
-
-    system.time(genotypes <- fread(paste('zcat',filename), sep=" ", nrows=numberOfLines, header=F))
     
-    lapply(unique(pop), generateSResultsFromGenotypes, genotypes, qcFilter, ldPrune)
+    print("Starting read file")
+    system.time(genotypes <- fread(paste('zcat',filename), sep=" ", nrows=numberOfLines, header=F))
+    print("Finished read file")
+    
+    names(genotypes) <- hap.sampleIDs
+    
+    # lapply runs into memory issues for large datasets, use for loop. *cringe*
+    for(subpop in unique(pop)){
+        print(gc())
+        print(subpop)
+        if(is.null(qcFilter)){
+            filterhap <- hap.pop%in%subpop
+            filterdip <- pop%in%subpop 
+        } else {
+            filterhap <- hap.pop%in%subpop & rep(qcFilter,each=2)
+            filterdip <- pop%in%subpop & qcFilter
+        }
+        hapsampleNames <- hap.sampleIDs[filterhap]
+        dipsampleNames <- sampleIDs[filterdip]
+        
+        res[[subpop]] <-generateSResultsFromGenotypes(subpop, genotypes[,filterhap, with=F], qcFilter, minVariants, ldPrune)
+    }
+    res
+    
+#     names(genotypesList) <- unique(pop)
+    
+#     library(foreach)
+#     library(doParallel)
+#     
+#     #     Initiate cluster
+#     if(!is.na(numCores)){
+#         cl <- makeCluster(numCores)
+#         registerDoParallel(cl)
+#     }
+#     print(paste("Running on",numCores,"cores..."))
+#     res <- foreach(genoSubset=genotypesList,pop_i=names(genotypesList),.packages=c("ggplot2","data.table","reshape2")) %dopar% {        
+#         source('~/1000GP/s_matrix_functions.R')
+#         generateSResultsFromGenotypes(pop_i, genoSubset, qcFilter, minVariants, ldPrune)
+#     }
+#     print(paste("Finished calculations"))
+#     
+#     if(!is.na(numCores)){
+#         stopCluster(cl)
+#     }
+
+#     res <- lapply(names(genotypesList), function(pop_i){
+#         generateSResultsFromGenotypes(pop_i, genotypesList[[pop_i]], qcFilter, minVariants, ldPrune)
+#     })
+#     res
+    
 }
 
-generateSResultsFromGenotypes <- function(subpop, genotypes, qcFilter, ldPrune=1){
-
-    if(is.null(qcFilter)){
-        filterhap <- hap.pop%in%subpop
-        filterdip <- pop%in%subpop 
-    } else {
-        filterhap <- hap.pop%in%subpop & rep(qcFilter,each=2)
-        filterdip <- pop%in%subpop & qcFilter
-    }
-    #     filterhap[hap.sampleIDs=="HG03998"] <- T
-    #     filterdip[sampleIDs=="HG03998"] <- T
-    #     filterhap[hap.sampleIDs=="HG03873"] <- T
-    #     filterdip[sampleIDs=="HG03873"] <- T
-    hapsampleNames <- hap.sampleIDs[filterhap]
-    dipsampleNames <- sampleIDs[filterdip]
+generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, qcFilter, minVariants, ldPrune=1){
     
-    # Test branch line
-    genotypes <- genotypes[,filterhap, with=F]
-    
-    
-    numSamples <- ncol(genotypes)
-    numVariants <- nrow(genotypes)
-    sumVariants <- rowSums(genotypes)
+    names(genotypesSubpop) <- make.unique(names(genotypesSubpop))
+    numSamples <- ncol(genotypesSubpop)
+    numVariants <- nrow(genotypesSubpop)
+    sumVariants <- rowSums(genotypesSubpop)
     
     
     # reverse so that MAF<.5
-    genotypes[sumVariants>(numSamples/2),] <- 1-genotypes[sumVariants>(numSamples/2),]
-    sumVariants <- rowSums(genotypes)
+    genotypesSubpop[sumVariants>(numSamples/2),] <- 1-genotypesSubpop[sumVariants>(numSamples/2),]
+    sumVariants <- rowSums(genotypesSubpop)
     
     # Intelligently LD prune
     numblocks <- numVariants/ldPrune +1
     blocks <- rep(1:numblocks, each=ldPrune)[1:numVariants]
     
-    system.time(genotypes <- genotypes[sapply(unique(blocks), function(x) {ldPrune*(x-1)+which.max(sumVariants[blocks==x])})])
-#     genotypes[,blocks:=NULL]
-    
+    system.time(runningWhichMax <- running(sumVariants,width=ldPrune,fun=which.max, by=ldPrune))
+    prunedIndices <- runningWhichMax + seq(0,ldPrune*(length(runningWhichMax)-1),ldPrune)
+    system.time(genotypesSubpop <- genotypesSubpop[prunedIndices])
+
     # remove < n variants
-    sumVariants <- rowSums(genotypes)
-    genotypes <- genotypes[sumVariants>minVariants,]
-    genotypes <- as.matrix(genotypes)
-    # Fully simulated ---------------------------------------------------------
-#     numSamples <- 100
-#     numVariants<- 100000
-#     genotypes <- matrix(rbinom(numSamples*2*numVariants,1, .1), ncol=numSamples*2)
-#     numSamples <- ncol(genotypes)
-#     sumVariants <- rowSums(genotypes)
-#     genotypes <- genotypes[sumVariants>5,]
-#     subpop <- "Simulated"
-#     sum(rowSums(genotypes)<2)    
-# #     ################### Toggle this.  Adds a related individual for testing ################
-#     coefR <- .1
-#     probs <- rep((1-2*coefR)/ncol(genotypes),ncol(genotypes))
-#     probs[1:2] <- probs[1:2]+coefR
-#     indices <- replicate(nrow(genotypes), {sample(ncol(genotypes),2 , prob=probs, replace=F)})
-# #     indices1 <- sample(ncol(genotypes), nrow(genotypes), prob=probs, replace=T)
-# #     indices2 <- sample(ncol(genotypes), nrow(genotypes), prob=probs, replace=T)
-#     relatedHap1 <- mapply(function(x,y){genotypes[x,y]},1:nrow(genotypes),indices[1,])
-#     relatedHap2 <- mapply(function(x,y){genotypes[x,y]},1:nrow(genotypes),indices[2,])
-#     genotypes <- cbind(genotypes, relatedHap1, relatedHap2)
-#     ################################################
-
-
+    sumVariants <- rowSums(genotypesSubpop)
+    genotypesSubpop <- genotypesSubpop[sumVariants>minVariants,]
+    genotypesSubpop <- as.matrix(genotypesSubpop)
 
     print("Number of used variants")
-    print(nrow(genotypes))
-    numFilteredVariants <- nrow(genotypes)
-    sumFilteredVariants <- rowSums(genotypes)
-    varcovMat <- cov(genotypes[,c(T,F)] + genotypes[,c(F,T)])
+    print(nrow(genotypesSubpop))
+    numFilteredVariants <- nrow(genotypesSubpop)
+    sumFilteredVariants <- rowSums(genotypesSubpop)
+    varcovMat <- cov(genotypesSubpop[,c(T,F)] + genotypesSubpop[,c(F,T)])
     
     totalPossiblePairs <- choose(numSamples,2)
     totalPairs <- choose(sumFilteredVariants,2)
@@ -87,11 +96,11 @@ generateSResultsFromGenotypes <- function(subpop, genotypes, qcFilter, ldPrune=1
     kinships <- seq(0,.25,.001)
     kinshipExpectation <- 1+kinships*(pkweightsMean-1)
         
-    s_matrix_numerator <- t(genotypes*weights)%*%genotypes
+    s_matrix_numerator <- t(genotypesSubpop*weights)%*%genotypesSubpop
     s_matrix_denominator <- numFilteredVariants
     s_matrix_hap <- s_matrix_numerator/s_matrix_denominator
-    colnames(s_matrix_hap) <- hapsampleNames
-    rownames(s_matrix_hap) <- hapsampleNames
+    colnames(s_matrix_hap) <- names(genotypesSubpop)
+    rownames(s_matrix_hap) <- names(genotypesSubpop)
     
     print(mean(s_matrix_hap[row(s_matrix_hap)!=col(s_matrix_hap)]))
     print(median(s_matrix_hap[row(s_matrix_hap)!=col(s_matrix_hap)]))
@@ -100,28 +109,15 @@ generateSResultsFromGenotypes <- function(subpop, genotypes, qcFilter, ldPrune=1
     
     # Collapse to diploid
     s_matrix_dip <- (s_matrix_hap[c(T,F),c(T,F)] + s_matrix_hap[c(F,T),c(T,F)] +s_matrix_hap[c(T,F),c(F,T)] + s_matrix_hap[c(F,T),c(F,T)])/4
-    colnames(s_matrix_dip) <- dipsampleNames
-    rownames(s_matrix_dip) <- dipsampleNames
+    colnames(s_matrix_dip) <- names(genotypesSubpop)[c(T,F)]
+    rownames(s_matrix_dip) <- names(genotypesSubpop)[c(T,F)]
     # very lazy variance estimate...
     var_s_dip <- var_s_hap/4
     
 
-    list(s_matrix_dip=s_matrix_dip, s_matrix_hap=s_matrix_hap, pkweightsMean=pkweightsMean, var_s_dip=var_s_dip, var_s_hap=var_s_hap, varcovMat=varcovMat)
-    
-
-    # For sim -----------------------------------------------------------------
-#     
-#     var_s <- var_s_dip
-#     gsm <- s_matrix_dip
-#     sample_IDs <- paste0("Sample",1:ncol(gsm))
-#     sample_IDs[length(sample_IDs)] <- "Related"
-#     
-#     var_s <- var_s_hap
-#     gsm <- s_matrix_hap
-#     sample_IDs <- paste0("Sample",1:ncol(gsm))
-#     sample_IDs[c(length(sample_IDs),length(sample_IDs)-1)] <- "Related"
-#     
-#     alphaCutoff=.01
+    popResult <- list(s_matrix_dip=s_matrix_dip, s_matrix_hap=s_matrix_hap, pkweightsMean=pkweightsMean, var_s_dip=var_s_dip, var_s_hap=var_s_hap, varcovMat=varcovMat)
+    saveRDS(popResult, paste0("./plots/s_distributions/",outputDir,"/plotdata/",subpop,"_data.rds"))
+    popResult
 
 }
 plotFromGSM <- function(subpop, gsm, var_s, pkweightsMean, plotname="", outputDir=".",alphaCutoff=.01){

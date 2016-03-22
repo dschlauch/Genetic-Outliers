@@ -1,10 +1,11 @@
 library(ggplot2)
 library(reshape2)
 library(data.table)
+library(gtools)
 
 #outputDir <- "filtered1000_fixed_phi"
 #genotypeFile <- "./data/1000GP_Phase3_chr10.hap.gz"
-genotypeFile <- "./data/combinedFiltered1000.gz"
+genotypeFile <- "./data/combinedFiltered40.gz"
 numberOfLines <- 5000
 minVariants <- 10
 numCores <- 4
@@ -12,7 +13,7 @@ args<-commandArgs(TRUE)
 outputDir <- '.'
 # gazalFilter <-"TGP2261"
 gazalFilter <- "NA"
-ldPrune <- 1
+ldPrune <- 10
 if(length(args)!=0){
     genotypeFile <- args[1]
     numberOfLines <- as.numeric(args[2])
@@ -50,8 +51,8 @@ rownames(popGroup) <- popGroup$pop
 source('~/1000GP/s_matrix_functions.R')
 
 
-library(foreach)
-library(doParallel)
+# library(foreach)
+# library(doParallel)
 
 # Initiate cluster
 # if(!is.na(numCores)){
@@ -62,8 +63,9 @@ library(doParallel)
 strt <- Sys.time()
 # Calculate all the s matrices and save
 # res <- foreach(pop_i=unique(pop),.packages=c("ggplot2","data.table","reshape2")) %dopar% {
-    result <- calculateSMatrix(pop_i, filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune)
-    saveRDS(result, paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
+    system.time(results <- calculateSMatrix(pop_i, filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune))
+    names(results) <- unique(pop)
+    saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
 # }
 
 print(Sys.time()-strt)
@@ -76,24 +78,23 @@ print(Sys.time()-strt)
 # outputDir <- "filtered99_TGP2261_LD10"
 # outputDir <- "filtered99_LD10"
 
-
+# Read in results
+results <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))   
 # Generate Plots ----------------------------------------------------------
 
-sapply(unique(pop),function(pop_i){
-    result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))   
-    s_vector <- result$s_matrix_dip[row(result$s_matrix_dip)>col(result$s_matrix_dip)] 
-    plotFromGSM(subpop=pop_i, gsm=result$s_matrix_dip, var_s=var(s_vector), pkweightsMean=result$pkweightsMean, "diploid", outputDir=outputDir)
+sapply(names(results), function(pop_i){
+    s_vector <- results[[pop_i]]$s_matrix_dip[row(results[[pop_i]]$s_matrix_dip)>col(results[[pop_i]]$s_matrix_dip)] 
+    plotFromGSM(subpop=pop_i, gsm=results[[pop_i]]$s_matrix_dip, var_s=var(s_vector), pkweightsMean=results[[pop_i]]$pkweightsMean, "diploid", outputDir=outputDir)
 })
 
 
 # Calculate structure significance ----------------------------------------
 
-popResults <- as.data.table(t(sapply(unique(pop),function(pop_i){
-    result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))     
-    s_vector <- result$s_matrix_dip[row(result$s_matrix_dip)>col(result$s_matrix_dip)]
-    topValuesKinship <- (sort(s_vector, decreasing=T)-1)/(result$weightsMean-1)
+popResults <- as.data.table(t(sapply(names(results), function(pop_i){
+    s_vector <- results[[pop_i]]$s_matrix_dip[row(results[[pop_i]]$s_matrix_dip)>col(results[[pop_i]]$s_matrix_dip)]
+    topValuesKinship <- (sort(s_vector, decreasing=T)-1)/(results[[pop_i]]$weightsMean-1)
     btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
-    c(structurePValue=btest$p.value, var_s=result$var_s_dip, sampleVariance=var(s_vector))
+    c(structurePValue=btest$p.value, var_s=results[[pop_i]]$var_s_dip, sampleVariance=var(s_vector))
 })), keep.rownames=T)
 
 
