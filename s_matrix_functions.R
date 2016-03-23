@@ -19,8 +19,8 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
         }
         hapsampleNames <- hap.sampleIDs[filterhap]
         dipsampleNames <- sampleIDs[filterdip]
-        
-        res[[subpop]] <-generateSResultsFromGenotypes(subpop, genotypes[,filterhap, with=F], qcFilter, minVariants, ldPrune)
+        res <- list()
+        res[[subpop]] <- generateSResultsFromGenotypes(subpop, genotypes[,filterhap, with=F], qcFilter, minVariants, ldPrune)
     }
     res
     
@@ -99,8 +99,8 @@ generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, qcFilter, min
     s_matrix_numerator <- t(genotypesSubpop*weights)%*%genotypesSubpop
     s_matrix_denominator <- numFilteredVariants
     s_matrix_hap <- s_matrix_numerator/s_matrix_denominator
-    colnames(s_matrix_hap) <- names(genotypesSubpop)
-    rownames(s_matrix_hap) <- names(genotypesSubpop)
+    colnames(s_matrix_hap) <- colnames(genotypesSubpop)
+    rownames(s_matrix_hap) <- colnames(genotypesSubpop)
     
     print(mean(s_matrix_hap[row(s_matrix_hap)!=col(s_matrix_hap)]))
     print(median(s_matrix_hap[row(s_matrix_hap)!=col(s_matrix_hap)]))
@@ -109,8 +109,8 @@ generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, qcFilter, min
     
     # Collapse to diploid
     s_matrix_dip <- (s_matrix_hap[c(T,F),c(T,F)] + s_matrix_hap[c(F,T),c(T,F)] +s_matrix_hap[c(T,F),c(F,T)] + s_matrix_hap[c(F,T),c(F,T)])/4
-    colnames(s_matrix_dip) <- names(genotypesSubpop)[c(T,F)]
-    rownames(s_matrix_dip) <- names(genotypesSubpop)[c(T,F)]
+    colnames(s_matrix_dip) <- colnames(genotypesSubpop)[c(T,F)]
+    rownames(s_matrix_dip) <- colnames(genotypesSubpop)[c(T,F)]
     # very lazy variance estimate...
     var_s_dip <- var_s_hap/4
     
