@@ -1,8 +1,8 @@
 
 # Read in all the results. plot histograms.  Calculated structure p.value
 
-# outputDir <- "filtered99_TGP2261_LD10"
-# outputDir <- "filtered99_LD10"
+# outputDir <- "filtered40_TGP2261_LD10"
+# outputDir <- "filtered40_LD10"
 
 # Read in results
 results <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
@@ -46,14 +46,23 @@ sapply(names(results), function(pop_i){
 # Calculate structure significance ----------------------------------------
 
 popResults <- as.data.table(t(sapply(names(results), function(pop_i){
-    s_vector <- results[[pop_i]]$s_matrix_dip[row(results[[pop_i]]$s_matrix_dip)>col(results[[pop_i]]$s_matrix_dip)]
-    topValuesKinship <- (sort(s_vector, decreasing=T)-1)/(results[[pop_i]]$weightsMean-1)
+    s_vector <- sort(results[[pop_i]]$s_matrix_dip[row(results[[pop_i]]$s_matrix_dip)>col(results[[pop_i]]$s_matrix_dip)], decreasing=T)
+    topKinship <- (s_vector[1]-1)/(results[[pop_i]]$pkweightsMean-1)
     btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
-    c(structurePValue=btest$p.value, var_s=results[[pop_i]]$var_s_dip, sampleVariance=var(s_vector))
+    structureKSTest <- ks.test(scale(s_vector), "pnorm", alternative = c("less"))$p.value
+    crypticSig <- ifelse((s_vector[1]-1)/sd(s_vector) > qnorm(1-.005/choose(length(s_vector),2)), "YES+",
+                                   ifelse((s_vector[1]-1)/sd(s_vector) > qnorm(1-.025/choose(length(s_vector),2)),"YES","NO"))
+    structureSig <- ifelse(structureKSTest<.01, "YES+",ifelse(structureKSTest<.05,"YES","NO"))
+    c(structurePValue=btest$p.value, var_s=results[[pop_i]]$var_s_dip, sampleVariance=var(s_vector), 
+      structureKSTest=structureKSTest, closestRelatives=topKinship, crypticSig=crypticSig, structureSig=structureSig)
 })), keep.rownames=T)
 
+popResults <- popResults[order(rn)[rank(popGroup$pop)]]
+popResults$super <- popGroup$group
 
-
+write.table(popResults[,c("rn","super", "structureSig", "crypticSig"), with=F], 
+            paste0("./plots/s_distributions/",outputDir,"/popTable.txt"),quote =F, row.names=F, sep="\t",
+            col.names=c("Population","Super Population","Structure","Cryptic Relatedness"))
 
 # tidy up and plot structure results --------------------------------------
 
@@ -61,17 +70,28 @@ names(popResults)[1] <- "pop"
 popResults$group <- popGroup[popResults$pop,"group"] 
 popResults <- popResults[order(group,pop)]
 popResults$pop <- factor(popResults$pop, levels=popResults$pop)
-maxYvalue <- 165
-pdf(paste0("./plots/s_distributions/",outputDir,"/pValueForPop.pdf"), width=8, height=8)
-ggPVals <- ggplot(popResults, aes(y=-log(structurePValue), x=pop))+ geom_point(aes(color=group),size=3) + 
-    geom_hline(yintercept=-log(.05)) + #geom_text(aes(13,-log(.05),label = "alpha = .05", vjust = -1),parse = T) + 
-    geom_hline(yintercept=-log(.01)) + #geom_text(aes(13,-log(.01),label = "alpha = .01", vjust = 1),parse = T) + 
+maxYvalue <- 200
+ggPVals <- ggplot(popResults, aes(y=-log(structureKSTest), x=pop)) +
+#     geom_hline(yintercept=-log(.05)) + #geom_text(aes(13,-log(.05),label = "alpha = .05", vjust = -1),parse = T) + 
+    geom_hline(yintercept=0) +
+    geom_hline(yintercept=-log(.01), linetype='dashed', color="red") + #geom_text(aes(20,-log(.01),size=5,label = "alpha == .01", vjust = -1),parse = T) + 
+    annotation_custom(
+        grob = textGrob(label = expression(alpha==.01), hjust = 0, gp = gpar(col="red",fontsize=10, cex = 1.5)),
+        ymin = -log(.01),      # Vertical position of the textGrob
+        ymax = -log(.01),
+        xmin = 27,         # Note: The grobs are positioned outside the plot area
+        xmax = 27) +    
     ggtitle("p-value for structure in each population") + theme_bw() +
     ylab("-log(p-value)") + xlab("Population") + ggtitle("Structure Detected in 1000 Genomes Populations") +
     guides(color = guide_legend(title = "Super population")) + 
     ylim(0,maxYvalue) +
+    geom_point(aes(color=group),size=3) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
-print(ggPVals)
+gt <- ggplot_gtable(ggplot_build(ggPVals))
+gt$layout$clip[gt$layout$name == "panel"] <- "off"
+
+pdf(paste0("./plots/s_distributions/",outputDir,"/pValueForPop.pdf"), width=8, height=8)
+grid.draw(gt)
 dev.off()
 # ggplot(subset(popResults,!pop%in%c("PEL","MXL","ASW","PUR")), aes(y=var_s, x=sampleVariance, label=pop))+ geom_point(col="red", size=5) + geom_text(aes(y=var_s, x=sampleVariance))+ geom_abline() +
 #     xlim(0,.005)+ylim(0,.005)
@@ -121,7 +141,8 @@ resTableAll[order(-CoK)]
 ggCoKGazal <- ggplot(resTableAll, aes(CombinedInfered, CoK)) + theme_bw() +
     geom_jitter(aes(color=group), alpha=.5) + scale_x_discrete(limits=c("Unrelated","CO","AV or HS", "FS or PO")) + geom_violin(alpha=.4) +
     xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship") + ggtitle("Estimated Kinship vs Inferred Relationship (Gazal 2015)") + 
-    guides(color = guide_legend(title = "Super population"))
+    guides(color = guide_legend(title = "Super population")) +
+    theme(plot.title = element_text(size=20))
 tiff(paste0("./plots/s_distributions/",outputDir,"/EstimatedCoKvsGazal.tiff"), width=900, height=900)
 print(ggCoKGazal)
 dev.off()
@@ -133,6 +154,7 @@ dev.off()
 ggCoKGazalUnstructured <- ggplot(subset(resTableAll, !pop%in%structuredPops), aes(CombinedInfered, CoK)) + theme_bw() +
     geom_jitter(aes(color=group), alpha=.5) + scale_x_discrete(limits=c("Unrelated","CO","AV or HS", "FS or PO")) + geom_violin(alpha=.4) +
     xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship") + ggtitle("Estimated Kinship vs Inferred Relationship (Gazal 2015)") +
+    theme(plot.title = element_text(size=20)) +
     guides(color = guide_legend(title = "Super population"))
 tiff(paste0("./plots/s_distributions/",outputDir,"/EstimatedCoKvsGazalUnstruct.tiff"), width=900, height=900)
 print(ggCoKGazalUnstructured)
