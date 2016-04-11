@@ -7,6 +7,7 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
     names(genotypes) <- hap.sampleIDs
     
     # lapply runs into memory issues for large datasets, use for loop. *cringe*
+    results <- list()
     for(subpop in unique(pop)){
         print(gc())
         print(subpop)
@@ -19,37 +20,10 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
         }
         hapsampleNames <- hap.sampleIDs[filterhap]
         dipsampleNames <- sampleIDs[filterdip]
-        res <- list()
-        res[[subpop]] <- generateSResultsFromGenotypes(subpop, genotypes[,filterhap, with=F], qcFilter, minVariants, ldPrune)
+        results[[subpop]] <- generateSResultsFromGenotypes(subpop, genotypes[,filterhap, with=F], qcFilter, minVariants, ldPrune)
     }
-    res
-    
-#     names(genotypesList) <- unique(pop)
-    
-#     library(foreach)
-#     library(doParallel)
-#     
-#     #     Initiate cluster
-#     if(!is.na(numCores)){
-#         cl <- makeCluster(numCores)
-#         registerDoParallel(cl)
-#     }
-#     print(paste("Running on",numCores,"cores..."))
-#     res <- foreach(genoSubset=genotypesList,pop_i=names(genotypesList),.packages=c("ggplot2","data.table","reshape2")) %dopar% {        
-#         source('~/1000GP/s_matrix_functions.R')
-#         generateSResultsFromGenotypes(pop_i, genoSubset, qcFilter, minVariants, ldPrune)
-#     }
-#     print(paste("Finished calculations"))
-#     
-#     if(!is.na(numCores)){
-#         stopCluster(cl)
-#     }
-
-#     res <- lapply(names(genotypesList), function(pop_i){
-#         generateSResultsFromGenotypes(pop_i, genotypesList[[pop_i]], qcFilter, minVariants, ldPrune)
-#     })
-#     res
-    
+    names(results) <- unique(pop)
+    results    
 }
 
 generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, qcFilter, minVariants, ldPrune=1){
@@ -87,7 +61,11 @@ generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, qcFilter, min
     totalPairs <- choose(sumFilteredVariants,2)
     weights <- totalPossiblePairs/totalPairs
     p <- 1/weights
-    var_s_hap <- sum((1-p)/p)/(numFilteredVariants^2)
+
+    # var_s_hap <- sum((1-p)/p)/(numFilteredVariants^2)
+    # recalculated variance 3/23/16
+    var_s_hap <- sum(weights-1)/(numFilteredVariants^2)
+    
     print("variance of s (haploid)")
     print(var_s_hap)
     

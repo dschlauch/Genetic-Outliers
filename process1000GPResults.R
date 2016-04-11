@@ -5,30 +5,34 @@
 # outputDir <- "filtered99_LD10"
 
 # Read in results
-results <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))   
+results <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
+# results <- lapply(unique(pop), function(pop_i){
+#     
+#     result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))
+# })
 ##### Fix for results which don't contain samplenames, delete when no longer necessary
-resTableAll <- sapply(unique(pop),function(subpop){
-    if(is.null(qcFilter)){
-        filterhap <- hap.pop%in%subpop
-        filterdip <- pop%in%subpop 
-    } else {
-        filterhap <- hap.pop%in%subpop & rep(qcFilter,each=2)
-        filterdip <- pop%in%subpop & qcFilter
-    }
-    result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",subpop, "_data.rds"))
-    colnames(result$s_matrix_dip) <- sampleIDs[filterdip]
-    rownames(result$s_matrix_dip) <- sampleIDs[filterdip]
-    colnames(result$s_matrix_hap) <- sampleIDs[filterhap]
-    rownames(result$s_matrix_hap) <- sampleIDs[filterhap]
-    saveRDS(result,paste0("./plots/s_distributions/",outputDir,"/plotdata/",subpop, "_data.rds"))
-    
-    
-    colnames(results[[subpop]]$s_matrix_dip) <- sampleIDs[filterdip]
-    rownames(results[[subpop]]$s_matrix_dip) <- sampleIDs[filterdip]
-    colnames(results[[subpop]]$s_matrix_hap) <- sampleIDs[filterhap]
-    rownames(results[[subpop]]$s_matrix_hap) <- sampleIDs[filterhap]
-})
-saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
+# resTableAll <- sapply(unique(pop),function(subpop){
+#     if(is.null(qcFilter)){
+#         filterhap <- hap.pop%in%subpop
+#         filterdip <- pop%in%subpop 
+#     } else {
+#         filterhap <- hap.pop%in%subpop & rep(qcFilter,each=2)
+#         filterdip <- pop%in%subpop & qcFilter
+#     }
+#     result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",subpop, "_data.rds"))
+#     colnames(result$s_matrix_dip) <- sampleIDs[filterdip]
+#     rownames(result$s_matrix_dip) <- sampleIDs[filterdip]
+#     colnames(result$s_matrix_hap) <- sampleIDs[filterhap]
+#     rownames(result$s_matrix_hap) <- sampleIDs[filterhap]
+#     saveRDS(result,paste0("./plots/s_distributions/",outputDir,"/plotdata/",subpop, "_data.rds"))
+#     
+#     
+#     colnames(results[[subpop]]$s_matrix_dip) <- sampleIDs[filterdip]
+#     rownames(results[[subpop]]$s_matrix_dip) <- sampleIDs[filterdip]
+#     colnames(results[[subpop]]$s_matrix_hap) <- sampleIDs[filterhap]
+#     rownames(results[[subpop]]$s_matrix_hap) <- sampleIDs[filterhap]
+# })
+# saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
 
 
 # Generate Plots ----------------------------------------------------------
@@ -55,10 +59,19 @@ popResults <- as.data.table(t(sapply(names(results), function(pop_i){
 
 names(popResults)[1] <- "pop"
 popResults$group <- popGroup[popResults$pop,"group"] 
+popResults <- popResults[order(group,pop)]
+popResults$pop <- factor(popResults$pop, levels=popResults$pop)
+maxYvalue <- 165
 pdf(paste0("./plots/s_distributions/",outputDir,"/pValueForPop.pdf"), width=8, height=8)
-ggplot(popResults, aes(y=structurePValue, x=pop))+ geom_point(aes(color=group)) + geom_hline(yintercept=.05) + geom_hline(yintercept=.01) +
+ggPVals <- ggplot(popResults, aes(y=-log(structurePValue), x=pop))+ geom_point(aes(color=group),size=3) + 
+    geom_hline(yintercept=-log(.05)) + #geom_text(aes(13,-log(.05),label = "alpha = .05", vjust = -1),parse = T) + 
+    geom_hline(yintercept=-log(.01)) + #geom_text(aes(13,-log(.01),label = "alpha = .01", vjust = 1),parse = T) + 
     ggtitle("p-value for structure in each population") + theme_bw() +
+    ylab("-log(p-value)") + xlab("Population") + ggtitle("Structure Detected in 1000 Genomes Populations") +
+    guides(color = guide_legend(title = "Super population")) + 
+    ylim(0,maxYvalue) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
+print(ggPVals)
 dev.off()
 # ggplot(subset(popResults,!pop%in%c("PEL","MXL","ASW","PUR")), aes(y=var_s, x=sampleVariance, label=pop))+ geom_point(col="red", size=5) + geom_text(aes(y=var_s, x=sampleVariance))+ geom_abline() +
 #     xlim(0,.005)+ylim(0,.005)
@@ -69,7 +82,7 @@ cbind(sort(varianceRatio, decreasing = TRUE))
 sum(popResults$structurePValue<.01)
 popResults$structurePValue[popResults$structurePValue<.01]
 popResults <- popResults[order(popResults$structurePValue),]
-structuredPops <- popResults$pop[popResults$structurePValue<.05]
+structuredPops <- popResults$pop[popResults$structurePValue<.01]
 
 
 # generate summary table --------------------------------------------------
@@ -86,12 +99,10 @@ resTableAll <- data.table(do.call(rbind, lapply(unique(pop),function(pop_i){
     resTable
 })))
 
-gazal_related <- read.csv("./data/gazal_related.csv")
-gazal_related <- data.table(gazal_related)
-gazal_related_rev <- copy(gazal_related)
+gazal_related_rev <- copy(gazal_related_orig)
 setcolorder(gazal_related_rev, c(2,1,3,4,5))
 names(gazal_related_rev)[1:2] <- names(gazal_related_rev)[2:1]
-gazal_related <- rbind(gazal_related,gazal_related_rev)
+gazal_related <- rbind(gazal_related_orig,gazal_related_rev)
 names(gazal_related)[1:2] <- names(resTableAll)[1:2]
 resTableAll <- merge(resTableAll,gazal_related, by=names(gazal_related)[1:2],all.x=T)
 resTableAll$group <- popGroup[resTableAll$pop,"group"]
@@ -103,16 +114,26 @@ resTableAll$CombinedInfered[resTableAll$INFERED.RELATIONSHIP=="CO"] <- "CO"
 resTableAll$CombinedInfered[resTableAll$INFERED.RELATIONSHIP=="AV"|resTableAll$INFERED.RELATIONSHIP=="HS"] <- "AV or HS"
 resTableAll$CombinedInfered[resTableAll$INFERED.RELATIONSHIP=="FS"|resTableAll$INFERED.RELATIONSHIP=="PO"] <- "FS or PO"
 resTableAll[order(-CoK)]
-ggplot(resTableAll, aes(CombinedInfered, CoK)) +
-    geom_jitter(aes(alpha=(INFERED.RELATIONSHIP!="Unrelated")*.02)) + scale_x_discrete(limits=levels(resTableAll$INFERED.RELATIONSHIP)[c(6,2,1,4,3,5)])
-ggplot(resTableAll, aes(INFERED.RELATIONSHIP, CoK)) +
-    geom_boxplot() + scale_x_discrete(limits=levels(resTableAll$INFERED.RELATIONSHIP)[c(6,2,1,4,3,5)]) +xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship")
-pdf(paste0("./plots/s_distributions/",outputDir,"/EstimatedCoKvsGazal.pdf"), width=8, height=8)
-ggplot(resTableAll, aes(CombinedInfered, CoK)) + theme_bw() +
-    geom_boxplot() + geom_jitter(aes(color=group), alpha=.5) + scale_x_discrete(limits=c("Unrelated","CO","AV or HS", "FS or PO")) +
-    xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship") + ggtitle("Our estimated CoK vs Inferred Relationship (Gazal 2015)")
+# ggplot(resTableAll, aes(CombinedInfered, CoK)) +
+#     geom_jitter(aes(alpha=(INFERED.RELATIONSHIP!="Unrelated")*.02)) + scale_x_discrete(limits=levels(resTableAll$INFERED.RELATIONSHIP)[c(6,2,1,4,3,5)])
+# ggplot(resTableAll, aes(INFERED.RELATIONSHIP, CoK)) +
+#     geom_boxplot() + scale_x_discrete(limits=levels(resTableAll$INFERED.RELATIONSHIP)[c(6,2,1,4,3,5)]) +xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship")
+ggCoKGazal <- ggplot(resTableAll, aes(CombinedInfered, CoK)) + theme_bw() +
+    geom_jitter(aes(color=group), alpha=.5) + scale_x_discrete(limits=c("Unrelated","CO","AV or HS", "FS or PO")) + geom_violin(alpha=.4) +
+    xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship") + ggtitle("Estimated Kinship vs Inferred Relationship (Gazal 2015)") + 
+    guides(color = guide_legend(title = "Super population"))
+tiff(paste0("./plots/s_distributions/",outputDir,"/EstimatedCoKvsGazal.tiff"), width=900, height=900)
+print(ggCoKGazal)
 dev.off()
 
-ggplot(subset(resTableAll, !pop%in%structuredPops), aes(CombinedInfered, CoK)) + theme_bw() +
-    geom_boxplot() + geom_jitter(aes(color=group), alpha=.5) + scale_x_discrete(limits=c("Unrelated","CO","AV or HS", "FS or PO")) +
-    xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship") + ggtitle("Our estimated CoK vs Inferred Relationship (Gazal 2015)")
+
+# ggplot(subset(resTableAll, !pop%in%structuredPops), aes(CombinedInfered, CoK)) + theme_bw() +
+#     geom_boxplot() + geom_jitter(aes(color=group), alpha=.5) + scale_x_discrete(limits=c("Unrelated","CO","AV or HS", "FS or PO")) +
+#     xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship") + ggtitle("Our estimated CoK vs Inferred Relationship (Gazal 2015)")
+ggCoKGazalUnstructured <- ggplot(subset(resTableAll, !pop%in%structuredPops), aes(CombinedInfered, CoK)) + theme_bw() +
+    geom_jitter(aes(color=group), alpha=.5) + scale_x_discrete(limits=c("Unrelated","CO","AV or HS", "FS or PO")) + geom_violin(alpha=.4) +
+    xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship") + ggtitle("Estimated Kinship vs Inferred Relationship (Gazal 2015)") +
+    guides(color = guide_legend(title = "Super population"))
+tiff(paste0("./plots/s_distributions/",outputDir,"/EstimatedCoKvsGazalUnstruct.tiff"), width=900, height=900)
+print(ggCoKGazalUnstructured)
+dev.off()
