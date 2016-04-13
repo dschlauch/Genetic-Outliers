@@ -1,7 +1,9 @@
 # after sourcing files from masterAssociations.R
 library(ggplot2)
 library(reshape2)
+library(data.table)
 require(gridExtra)
+library(ggrepel)
 
 getSampleSubset <- function(subpops){
   if("all"%in%subpops){
@@ -10,20 +12,24 @@ getSampleSubset <- function(subpops){
     sampleSubset <- pop %in% subpops
   }
 }
-generateggplotDF <- function(jaccard.correction, varcov.correction, sampleSubset, components=c(1,2)){
-  components.df <- data.frame(row.names=sampleIDs[sampleSubset])
-  components.df$JaccardVector1 <- jaccard.correction[,components[1]]
-  components.df$JaccardVector2 <- jaccard.correction[,components[2]]
-  components.df$VarcovVector1 <- varcov.correction[,components[1]]
-  components.df$VarcovVector2 <- varcov.correction[,components[2]]
-  components.df$pop <- pop[sampleSubset]
-  components.df$group <- group[sampleSubset]
-  components.df
+generateggplotDT <- function(jaccard.correction, varcov.correction, sampleSubset, components=c(1,2)){
+  components.df <- data.frame(samples=rep(sampleIDs[sampleSubset],2))
+  components.df$Vector1 <- c(jaccard.correction[,components[1]],varcov.correction[,components[1]])
+  components.df$Vector2 <- c(jaccard.correction[,components[2]],varcov.correction[,components[2]])
+#   components.df$VarcovVector1 <- 
+#   components.df$VarcovVector2 <- varcov.correction[,components[2]]
+  components.df$pop <- rep(pop[sampleSubset],2)
+  components.df$group <- rep(group[sampleSubset],2)
+  components.df$method <- c(rep("Ours",sum(sampleSubset)),rep("varcov",sum(sampleSubset)))
+  data.table(components.df)
 }
-plotPCAsSideBySide <-  function(components.df){
-  jaccardPlot <- ggplot(components.df, aes(x = JaccardVector1, y = JaccardVector2)) + ggtitle("Our method") + geom_point(aes(color=factor(pop))) + ylab("Component 2")+ xlab("Component 1") + guides(colour=FALSE)
-  varcovPlot <-  ggplot(components.df, aes(x = VarcovVector1, y = VarcovVector2))   + ggtitle("PCA (Variance)") + geom_point(aes(color=factor(pop))) + ylab("Component 2")+ xlab("Component 1")
-  grid.arrange(jaccardPlot, varcovPlot, ncol=2,top = "Principal Component Plots")
+plotPCAsSideBySide <-  function(components.dt){
+    plot_labeller <- function(variable,value){
+        list(Ours="Our Method",varcov="Variance-Covariance")[value]
+    }
+  ggplot(components.dt, aes(x = Vector1, y = Vector2)) + 
+      ggtitle("Principal Component Plots") + ylab("Component 2")+ xlab("Component 1") + guides(colour=FALSE) + theme_bw() + facet_grid(.~method, labeller=plot_labeller) +
+      geom_point(aes(color=factor(pop)), size=5, alpha=.8) + geom_text_repel(data=subset(components.dt, Vector1>.1 | abs(Vector2)>.1 ),aes( label=samples)) 
 }
 withinVsBetween <-  function(components.df){
   ind <- t(combn(nrow(components.df),2))
@@ -39,7 +45,7 @@ withinVsBetween <-  function(components.df){
 ####################################
 ####################################
 
-
+sampleSubset <- T
 sampleSubset <- getSampleSubset("all")
 sampleSubset <- getSampleSubset(c("TSI","IBS"))
 sampleSubset <- getSampleSubset(c("ITU","STU"))
@@ -57,7 +63,10 @@ sampleSubset <- getSampleSubset(c("ITU","BEB"))
 
 jaccard.correction <- eigen(jaccardMatrix[sampleSubset,sampleSubset])$vectors
 varcov.correction <- eigen(varcovMatrix[sampleSubset,sampleSubset])$vectors
-components.df <- generateggplotDF(jaccard.correction, varcov.correction, sampleSubset, c(3,2))
-plotPCAsSideBySide(components.df)
+
+jaccard.correction <- eigen(jaccardMatrix)$vectors
+varcov.correction <- eigen(varcovMatrix)$vectors
+components.dt <- generateggplotDT(jaccard.correction, varcov.correction, sampleSubset, c(2,3))
+plotPCAsSideBySide(components.dt)
 withinVsBetween(components.df)
 

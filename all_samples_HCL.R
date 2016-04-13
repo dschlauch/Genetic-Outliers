@@ -14,6 +14,7 @@ colorCodesPop <- c("dodgerblue2","#E31A1C", # red
                           "darkturquoise","green1","yellow4","yellow3",
                           "darkorange4","brown","black")
 names(colorCodesPop)<-unique(pop)
+colorCodesPop <- colorCodesPop[order(names(colorCodesPop))]
 labelCol <- function(x) {
   if (is.leaf(x)) {
     ## fetch label
@@ -28,15 +29,27 @@ labelCol <- function(x) {
 
 # Load in data
 # jaccardMatrix <- read.csv('~/1000GP/output_0_20/combined_jaccard.csv', row.names=1)
-# 
+# results <- readRDS("~/1000GP/plots/s_distributions/filtered40_LD10_all/plotdata/Allsamples_data.rds")
+results <- readRDS("~/1000GP/plots/s_distributions/plotdata/STU_ITU_data.rds")
+results <- readRDS("~/1000GP/plots/s_distributions/plotdata/CEU_YRI_data.rds")
+jaccardMatrix <- results$s_matrix_dip
+varcovMatrix <- results$varcovMat
+
 # ### hierarchical clustering
 # 
-subset <- sample(2504,100)
-subset <- rep(T,2504)
+# subset <- sample(2504,100)
+subset <- T
 jm <- as.matrix(jaccardMatrix)[subset,subset]
-diag(jm)<-0
-rownames(jm) <- group[subset]
-colnames(jm) <- pop[subset]
+varcovMatrix <- as.matrix(varcovMatrix)[subset,subset]
+# diag(jm)<-0
+whichPeople <- sampleIDs%in%rownames(jaccardMatrix) 
+rownames(jm) <- group[whichPeople]
+colnames(jm) <- pop[whichPeople]
+jm <- jm[order(rownames(jm),colnames(jm)),order(rownames(jm),colnames(jm))]
+rownames(varcovMatrix) <- group[whichPeople]
+colnames(varcovMatrix) <- pop[whichPeople]
+varcovMatrix <- varcovMatrix[order(rownames(varcovMatrix),colnames(varcovMatrix)),order(rownames(varcovMatrix),colnames(varcovMatrix))]
+
 hc <- hclust(as.dist(max(jm)-jm),method="average")
 d <- dendrapply(as.dendrogram(hc, hang=max(jm)*.1), labelCol)
 plot(d, main="Hierarchical Clustering across superpopulations")
@@ -51,33 +64,34 @@ plot(d, main="Hierarchical Clustering across superpopulations")
 # legend("topright", names(colorCodesPop[1:13]),  lty=1, lwd=10, col=colorCodesPop[1:13], cex = 0.5, horiz = T,  inset=c(0,.05))
 # legend("topright", names(colorCodesPop[14:26]),  lty=1, lwd=10, col=colorCodesPop[14:26], cex = 0.5, horiz = T,  inset=c(0,.10))
 
-plotHeatmap <-  function(x, subset=NA, title="GSM"){
+plotHeatmap <-  function(x, subset=NA, titleText="GSM"){
     if(is.na(subset)){
         subset <- rep(T,nrow(x))
     }
     simMat <- as.matrix(x)[subset,subset]
-    diag(simMat)<-0
-    rownames(simMat) <- group[subset]
-    colnames(simMat) <- pop[subset]
-    hc <- hclust(as.dist(1-simMat),method="average")
-    d <- dendrapply(as.dendrogram(hc, hang=max(simMat)*.1), labelCol)
-#     plot(d, main="Hierarchical Clustering across superpopulations", ylim=c(1-max(simMat)*1.25,1))
+    diag(simMat)<- NA
     
-#     simMat[simMat>.005]<-.005
-    simMat[simMat>quantile(simMat,.99)]<-quantile(simMat,.99)
-    heatmap.2(simMat, Rowv=d, Colv=d, dendrogram="none", trace="none", main=title, col="bluered",
-              labRow="",labCol="",key=FALSE, RowSideColors=colorCodes[rownames(simMat)], ColSideColors=colorCodesPop[colnames(simMat)],
-              #           lwid = c(1,10),lhei = c(.01,5), margins = c(5,10))
-    )
-    legend("left", names(colorCodes), inset=c(0.1,0),  lty=1, lwd=10, col=colorCodes, cex = 0.75)
-    legend("topright", names(colorCodesPop[1:13]),  lty=1, lwd=10, col=colorCodesPop[1:13], cex = 0.5, horiz = T,  inset=c(0,.05))
-    legend("topright", names(colorCodesPop[14:26]),  lty=1, lwd=10, col=colorCodesPop[14:26], cex = 0.5, horiz = T,  inset=c(0,.10))
+    breaks <- c(seq(quantile(simMat,.35, na.rm=T),quantile(simMat,.55, na.rm=T),length.out=100), # Blue breaks
+                seq(quantile(simMat,.55, na.rm=T),quantile(simMat,.85, na.rm=T),length.out=100)) # Red breaks
+    heatmap.2(simMat, Rowv=F, Colv=F, dendrogram="none", trace="none", main="", cex.main=12, col="bluered",
+        labRow="",labCol="",key=FALSE, RowSideColors=colorCodes[rownames(simMat)], ColSideColors=colorCodesPop[colnames(simMat)],
+        breaks=breaks)
+
+    title(main=titleText,cex.main = 4)
+    legend(0.1,.5, names(colorCodes), inset=.1,  lty=1, lwd=30, col=colorCodes, cex = 2)
+    legend("topright", names(colorCodesPop[1:9]),  lty=1, lwd=30, col=colorCodesPop[1:9], cex = 1.5, horiz = T,  inset=c(.04,.05))
+    legend("topright", names(colorCodesPop[10:18]),  lty=1, lwd=30, col=colorCodesPop[10:18], cex = 1.5, horiz = T,  inset=c(.04,.10))
+    legend("topright", names(colorCodesPop[19:26]),  lty=1, lwd=30, col=colorCodesPop[19:26], cex = 1.5, horiz = T,  inset=c(.04,.15))
 }
 
 
 ## Usage
 ## Commented so can source from crypticness.R
-# plotHeatmap(jaccardMatrix,title="Rare jaccard GSM")
-# plotHeatmap(varcovMatrix,title="Varcov GSM")
-# # for removing possible related individuals
-# related <- which(jm>.1,arr.ind=T)[,1]
+png(paste0("./plots/s_distributions/",outputDir,"/GSM.png"), width = 1400, height = 1200)
+plotHeatmap(jaccardMatrix,title="Genetic Similarity Matrix")
+dev.off()
+png(paste0("./plots/s_distributions/",outputDir,"/varcovGSM.png"), width = 1400, height = 1200)
+plotHeatmap(varcovMatrix,title="Varcov GSM")
+dev.off()
+# for removing possible related individuals
+related <- which(jm>.1,arr.ind=T)[,1]

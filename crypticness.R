@@ -7,7 +7,7 @@ library(grid)
 
 # Analysis parameters -----------------------------------------------------
 genotypeFile <- "./data/combinedFiltered1000.gz"
-numberOfLines <- 5000
+numberOfLines <- 100000
 minVariants <- 10
 numCores <- 4
 args<-commandArgs(TRUE)
@@ -33,8 +33,16 @@ if(length(args)!=0){
 source('~/1000GP/read1000GPsupportFiles.R')
 source('~/1000GP/s_matrix_functions.R')
 
+
+# Run all for HCL ---------------------------------------------------------
+system.time(results <- calculateSMatrix("All", filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune))
+
+# Run some for HCL ---------------------------------------------------------
+system.time(results <- calculateSMatrix(c("STU","ITU"), filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune))
+
+
 # Calculate all the s matrices and save
-system.time(results <- calculateSMatrix(pop_i, filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune))
+system.time(results <- calculateSMatrix("each", filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune))
 saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
 
 source('~/1000GP/process1000GPResults.R')

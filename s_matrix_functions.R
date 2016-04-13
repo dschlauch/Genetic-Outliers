@@ -1,15 +1,15 @@
-calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000.gz", numberOfLines=40695, minVariants=5, qcFilter=NULL, ldPrune=1){
+calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered1000.gz", numberOfLines=40695, minVariants=5, qcFilter=NULL, ldPrune=1){
     
     print("Starting read file")
     system.time(genotypes <- fread(paste('zcat',filename), sep=" ", nrows=numberOfLines, header=F))
     print("Finished read file")
     
     names(genotypes) <- hap.sampleIDs
-    
-    # lapply runs into memory issues for large datasets, use for loop. *cringe*
-    results <- list()
-    for(subpop in unique(pop)){
-        print(gc())
+    if (subpop=="All"){
+        generateSResultsFromGenotypes("Allsamples", genotypes, qcFilter, minVariants, ldPrune)
+        stop("Finished running all")
+    }
+    if(length(subpop)>0){
         print(subpop)
         if(is.null(qcFilter)){
             filterhap <- hap.pop%in%subpop
@@ -20,8 +20,30 @@ calculateSMatrix <- function(subpop="CEU", filename="./data/combinedFiltered1000
         }
         hapsampleNames <- hap.sampleIDs[filterhap]
         dipsampleNames <- sampleIDs[filterdip]
-        results[[subpop]] <- generateSResultsFromGenotypes(subpop, genotypes[,filterhap, with=F], qcFilter, minVariants, ldPrune)
+        generateSResultsFromGenotypes(subpop, genotypes[,filterhap, with=F], qcFilter, minVariants, ldPrune)
+        stop("Finished running combined")
     }
+    
+    # lapply runs into memory issues for large datasets, use for loop. *cringe*
+    
+    results <- list()
+    if (subpop=="each"){
+        for(subpop in unique(pop)){
+            print(gc())
+            print(subpop)
+            if(is.null(qcFilter)){
+                filterhap <- hap.pop%in%subpop
+                filterdip <- pop%in%subpop 
+            } else {
+                filterhap <- hap.pop%in%subpop & rep(qcFilter,each=2)
+                filterdip <- pop%in%subpop & qcFilter
+            }
+            hapsampleNames <- hap.sampleIDs[filterhap]
+            dipsampleNames <- sampleIDs[filterdip]
+            results[[subpop]] <- generateSResultsFromGenotypes(subpop, genotypes[,filterhap, with=F], qcFilter, minVariants, ldPrune)
+        }
+    }
+    
     names(results) <- unique(pop)
     results    
 }
@@ -94,7 +116,7 @@ generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, qcFilter, min
     
 
     popResult <- list(s_matrix_dip=s_matrix_dip, s_matrix_hap=s_matrix_hap, pkweightsMean=pkweightsMean, var_s_dip=var_s_dip, var_s_hap=var_s_hap, varcovMat=varcovMat)
-    saveRDS(popResult, paste0("./plots/s_distributions/",outputDir,"/plotdata/",subpop,"_data.rds"))
+    saveRDS(popResult, paste0("./plots/s_distributions/",outputDir,"/plotdata/",paste(subpop, collapse = "_"),"_data.rds"))
     popResult
 
 }
