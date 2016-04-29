@@ -35,20 +35,20 @@ source('~/1000GP/s_matrix_functions.R')
 
 
 # Run all for HCL ---------------------------------------------------------
-system.time(results <- calculateSMatrix("All", filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune))
+system.time(results <- calculateSMatrix("All", filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune, outputDir))
 
 # Run some for HCL ---------------------------------------------------------
-system.time(results <- calculateSMatrix(c("STU","ITU"), filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune))
-system.time(results <- calculateSMatrix(c("IBS","TSI"), filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune))
+system.time(results <- calculateSMatrix(c("STU","ITU"), filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune, outputDir))
+system.time(results <- calculateSMatrix(c("IBS","TSI"), filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune, outputDir))
 
 
 # Calculate all the s matrices and save
-system.time(results <- calculateSMatrix("each", filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune))
+system.time(results <- calculateSMatrix("each", filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune, outputDir))
 saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
 
 # Simulated results
-
-system.time(results <- homogeneousSimulations(200, nVariants=100000, cok=NA, 100, minVariants=5))
+kinshipCoefs <- seq(0,.0625,.0025)
+system.time(results <- homogeneousSimulations(numSimulatedSamples=200, nVariants=10000, cok=NA, numSimulations=100, minVariants=5, outputDir=outputDir))
 saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/Simulated_data.rds"))
 saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/Simulated_data_cok0625.rds"))
 

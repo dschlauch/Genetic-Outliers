@@ -1,13 +1,15 @@
-homogeneousSimulations <- function(numSimulatedSamples=200, nVariants=50000, numSimulations=10, cok=.0625, filename="./data/combinedFiltered1000.gz", numberOfLines=-1, minVariants=5, qcFilter=NULL, ldPrune=1){
+library(foreach)
+library(doParallel)
+homogeneousSimulations <- function(numSimulatedSamples=200, nVariants=50000, numSimulations=10, cok=.0625, filename="./data/combinedFiltered1000.gz", numberOfLines=-1, minVariants=5, qcFilter=NULL, ldPrune=1, numCores=4, outputDir='.'){
 #     print("Starting read file")
 #     system.time(genotypes <- fread(paste('zcat',filename), sep=" ", nrows=numberOfLines, header=F))
 #     print("Finished read file")
 #     nVariants <- 10000
-
+    registerDoParallel(makeCluster(4))
     results <- list()
 #     genotypes <- genotypes[, 1:numSimulatedSamples, with=F]
 #     genotypes[,Related := NA ] 
-    for(i in 1:numSimulations){
+    results <- foreach(i=1:numSimulations,.export=c("generateSResultsFromGenotypes"), .packages=c("data.table","gtools")) %dopar% {
         print(i)
         
         genotypes <- data.table(matrix(rbinom(numSimulatedSamples*nVariants,1,.1), ncol=numSimulatedSamples))
@@ -19,12 +21,26 @@ homogeneousSimulations <- function(numSimulatedSamples=200, nVariants=50000, num
     #         genotypes[, Related := relatedSample]
         }
         names(genotypes)[1:numSimulatedSamples] <- paste0("Sample",1:numSimulatedSamples)
-        results[[paste0("Simulated",i)]] <- generateSResultsFromGenotypes(paste0("Simulated",i), genotypes, qcFilter, minVariants, ldPrune)
+        generateSResultsFromGenotypes(paste0("Simulated",i), genotypes, qcFilter, minVariants, ldPrune, outputDir, saveResult=F)
     }
+    names(results) <- paste0("Simulated",1:numSimulations)
     results
 }
+getPopResults <- function(results){
+    as.data.table(t(sapply(names(results), function(pop_i){
+        s_vector <- sort(results[[pop_i]]$s_matrix_hap[row(results[[pop_i]]$s_matrix_hap)>col(results[[pop_i]]$s_matrix_hap)], decreasing=T)
+        topKinship <- (s_vector[1]-1)/(results[[pop_i]]$pkweightsMean-1)
+        btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
+        structureKSTest <- ks.test((s_vector-1)/sqrt(results[[pop_i]]$var_s_hap), "pnorm", alternative = c("less"))$p.value
+        crypticSig <- ifelse((s_vector[1]-1)/sqrt(results[[pop_i]]$var_s_hap) > qnorm(1-.005/length(s_vector)), "YES+",
+                             ifelse((s_vector[1]-1)/sqrt(results[[pop_i]]$var_s_hap) > qnorm(1-.025/length(s_vector)),"YES","NO"))
+        structureSig <- ifelse(structureKSTest<.01, "YES+",ifelse(structureKSTest<.05,"YES","NO"))
+        c(structurePValue=btest$p.value, var_s=results[[pop_i]]$var_s_hap, sampleVariance=var(s_vector),
+          structureKSTest=structureKSTest, closestRelatives=topKinship, crypticSig=crypticSig, structureSig=structureSig)
+    })), keep.rownames=T)
+}
 
-calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered1000.gz", numberOfLines=-1, minVariants=5, qcFilter=NULL, ldPrune=1){
+calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered1000.gz", numberOfLines=-1, minVariants=5, qcFilter=NULL, ldPrune=1, outputDir='.'){
     
     print("Starting read file")
     system.time(genotypes <- fread(paste('zcat',filename), sep=" ", nrows=numberOfLines, header=F))
@@ -46,7 +62,7 @@ calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered100
         }
         hapsampleNames <- hap.sampleIDs[filterhap]
         dipsampleNames <- sampleIDs[filterdip]
-        generateSResultsFromGenotypes(subpop, genotypes[,filterhap, with=F], qcFilter, minVariants, ldPrune)
+        generateSResultsFromGenotypes(subpop, genotypes[,filterhap, with=F], qcFilter, minVariants, ldPrune, outputDir)
         stop("Finished running combined")
     }
     
@@ -66,7 +82,7 @@ calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered100
             }
             hapsampleNames <- hap.sampleIDs[filterhap]
             dipsampleNames <- sampleIDs[filterdip]
-            results[[subpop]] <- generateSResultsFromGenotypes(subpop, genotypes[,filterhap, with=F], qcFilter, minVariants, ldPrune)
+            results[[subpop]] <- generateSResultsFromGenotypes(subpop, genotypes[,filterhap, with=F], qcFilter, minVariants, ldPrune, outputDir)
         }
     }
     
@@ -74,7 +90,7 @@ calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered100
     results    
 }
 
-generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, qcFilter, minVariants, ldPrune=1){
+generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, qcFilter, minVariants, ldPrune=1, outputDir=".", saveResult=T){
     
     names(genotypesSubpop) <- make.unique(names(genotypesSubpop))
     numSamples <- ncol(genotypesSubpop)
@@ -142,7 +158,9 @@ generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, qcFilter, min
     
 
     popResult <- list(s_matrix_dip=s_matrix_dip, s_matrix_hap=s_matrix_hap, pkweightsMean=pkweightsMean, var_s_dip=var_s_dip, var_s_hap=var_s_hap, varcovMat=varcovMat)
-    saveRDS(popResult, paste0("./plots/s_distributions/",outputDir,"/plotdata/",paste(subpop, collapse = "_"),"_data.rds"))
+    if(saveResult){
+        saveRDS(popResult, paste0("./plots/s_distributions/",outputDir,"/plotdata/",paste(subpop, collapse = "_"),"_data.rds"))
+    }
     popResult
 
 }

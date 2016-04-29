@@ -1,39 +1,4 @@
 
-# Read in all the results. plot histograms.  Calculated structure p.value
-
-# outputDir <- "filtered40_TGP2261_LD10"
-# outputDir <- "filtered40_LD10"
-
-# Read in results
-# results <- lapply(unique(pop), function(pop_i){
-#     
-#     result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))
-# })
-##### Fix for results which don't contain samplenames, delete when no longer necessary
-# resTableAll <- sapply(unique(pop),function(subpop){
-#     if(is.null(qcFilter)){
-#         filterhap <- hap.pop%in%subpop
-#         filterdip <- pop%in%subpop 
-#     } else {
-#         filterhap <- hap.pop%in%subpop & rep(qcFilter,each=2)
-#         filterdip <- pop%in%subpop & qcFilter
-#     }
-#     result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",subpop, "_data.rds"))
-#     colnames(result$s_matrix_dip) <- sampleIDs[filterdip]
-#     rownames(result$s_matrix_dip) <- sampleIDs[filterdip]
-#     colnames(result$s_matrix_hap) <- sampleIDs[filterhap]
-#     rownames(result$s_matrix_hap) <- sampleIDs[filterhap]
-#     saveRDS(result,paste0("./plots/s_distributions/",outputDir,"/plotdata/",subpop, "_data.rds"))
-#     
-#     
-#     colnames(results[[subpop]]$s_matrix_dip) <- sampleIDs[filterdip]
-#     rownames(results[[subpop]]$s_matrix_dip) <- sampleIDs[filterdip]
-#     colnames(results[[subpop]]$s_matrix_hap) <- sampleIDs[filterhap]
-#     rownames(results[[subpop]]$s_matrix_hap) <- sampleIDs[filterhap]
-# })
-# saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
-
-
 # Generate Plots ----------------------------------------------------------
 
 results <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
