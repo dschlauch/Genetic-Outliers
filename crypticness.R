@@ -7,7 +7,7 @@ library(grid)
 
 # Analysis parameters -----------------------------------------------------
 genotypeFile <- "./data/combinedFiltered1000.gz"
-numberOfLines <- 100000
+numberOfLines <- 30000
 minVariants <- 10
 numCores <- 4
 args<-commandArgs(TRUE)
@@ -39,10 +39,17 @@ system.time(results <- calculateSMatrix("All", filename=genotypeFile, numberOfLi
 
 # Run some for HCL ---------------------------------------------------------
 system.time(results <- calculateSMatrix(c("STU","ITU"), filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune))
+system.time(results <- calculateSMatrix(c("IBS","TSI"), filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune))
 
 
 # Calculate all the s matrices and save
 system.time(results <- calculateSMatrix("each", filename=genotypeFile, numberOfLines=numberOfLines, minVariants=minVariants, qcFilter=qcFilter, ldPrune))
 saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
+
+# Simulated results
+
+system.time(results <- homogeneousSimulations(200, nVariants=100000, cok=NA, 100, minVariants=5))
+saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/Simulated_data.rds"))
+saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/Simulated_data_cok0625.rds"))
 
 source('~/1000GP/process1000GPResults.R')

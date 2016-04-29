@@ -30,8 +30,10 @@ labelCol <- function(x) {
 # Load in data
 # jaccardMatrix <- read.csv('~/1000GP/output_0_20/combined_jaccard.csv', row.names=1)
 # results <- readRDS("~/1000GP/plots/s_distributions/filtered40_LD10_all/plotdata/Allsamples_data.rds")
-results <- readRDS("~/1000GP/plots/s_distributions/plotdata/STU_ITU_data.rds")
-results <- readRDS("~/1000GP/plots/s_distributions/plotdata/CEU_YRI_data.rds")
+results <- readRDS("~/1000GP/plots/s_distributions/filtered40_LD10_min100_all/plotdata/Allsamples_data.rds")
+# results <- readRDS("~/1000GP/plots/s_distributions/plotdata/STU_ITU_data.rds")
+# results <- readRDS("~/1000GP/plots/s_distributions/plotdata/CEU_YRI_data.rds")
+# results <- readRDS("~/1000GP/plots/s_distributions/plotdata/IBS_TSI_data.rds")
 jaccardMatrix <- results$s_matrix_dip
 varcovMatrix <- results$varcovMat
 
@@ -39,25 +41,25 @@ varcovMatrix <- results$varcovMat
 # 
 # subset <- sample(2504,100)
 subset <- T
-jm <- as.matrix(jaccardMatrix)[subset,subset]
+jaccardMatrix <- as.matrix(jaccardMatrix)[subset,subset]
 varcovMatrix <- as.matrix(varcovMatrix)[subset,subset]
-# diag(jm)<-0
+# diag(jaccardMatrix)<-0
 whichPeople <- sampleIDs%in%rownames(jaccardMatrix) 
-rownames(jm) <- group[whichPeople]
-colnames(jm) <- pop[whichPeople]
-jm <- jm[order(rownames(jm),colnames(jm)),order(rownames(jm),colnames(jm))]
+rownames(jaccardMatrix) <- group[whichPeople]
+colnames(jaccardMatrix) <- pop[whichPeople]
+jaccardMatrix <- jaccardMatrix[order(rownames(jaccardMatrix),colnames(jaccardMatrix)),order(rownames(jaccardMatrix),colnames(jaccardMatrix))]
 rownames(varcovMatrix) <- group[whichPeople]
 colnames(varcovMatrix) <- pop[whichPeople]
 varcovMatrix <- varcovMatrix[order(rownames(varcovMatrix),colnames(varcovMatrix)),order(rownames(varcovMatrix),colnames(varcovMatrix))]
 
-hc <- hclust(as.dist(max(jm)-jm),method="average")
-d <- dendrapply(as.dendrogram(hc, hang=max(jm)*.1), labelCol)
+hc <- hclust(as.dist(max(jaccardMatrix)-jaccardMatrix),method="average")
+d <- dendrapply(as.dendrogram(hc, hang=max(jaccardMatrix)*.1), labelCol)
 plot(d, main="Hierarchical Clustering across superpopulations")
 # 
-# jm[jm>.005]<-.005
+# jaccardMatrix[jaccardMatrix>.005]<-.005
 # dev.off()
-# heatmap.2(jm, Rowv=d, Colv=d, dendrogram="none", trace="none",
-#           labRow="",labCol="",key=FALSE, RowSideColors=colorCodes[rownames(jm)], ColSideColors=colorCodesPop[colnames(jm)],
+# heatmap.2(jaccardMatrix, Rowv=d, Colv=d, dendrogram="none", trace="none",
+#           labRow="",labCol="",key=FALSE, RowSideColors=colorCodes[rownames(jaccardMatrix)], ColSideColors=colorCodesPop[colnames(jaccardMatrix)],
 # #           lwid = c(1,10),lhei = c(.01,5), margins = c(5,10))
 # )
 # legend(.1,.5, names(colorCodes), inset=c(-0.01,0),  lty=1, lwd=10, col=colorCodes, cex = 0.75)
@@ -71,19 +73,29 @@ plotHeatmap <-  function(x, subset=NA, titleText="GSM"){
     simMat <- as.matrix(x)[subset,subset]
     diag(simMat)<- NA
     
-    breaks <- c(seq(quantile(simMat,.35, na.rm=T),quantile(simMat,.55, na.rm=T),length.out=100), # Blue breaks
-                seq(quantile(simMat,.55, na.rm=T),quantile(simMat,.85, na.rm=T),length.out=100)) # Red breaks
+    
+    simMat[] <- apply(scale(simMat),1,rank)
+    simMat <- simMat + t(simMat)
+    colorCodesPop <- colorCodesPop[unique(colnames(simMat))]
+    breaks <- c(seq(quantile(simMat,.55, na.rm=T),quantile(simMat,.80, na.rm=T),length.out=100), # Blue breaks
+                seq(quantile(simMat,.80, na.rm=T),quantile(simMat,.99, na.rm=T),length.out=100)) # Red breaks
     heatmap.2(simMat, Rowv=F, Colv=F, dendrogram="none", trace="none", main="", cex.main=12, col="bluered",
         labRow="",labCol="",key=FALSE, RowSideColors=colorCodes[rownames(simMat)], ColSideColors=colorCodesPop[colnames(simMat)],
         breaks=breaks)
 
-    title(main=titleText,cex.main = 4)
-    legend(0.1,.5, names(colorCodes), inset=.1,  lty=1, lwd=30, col=colorCodes, cex = 2)
-    legend("topright", names(colorCodesPop[1:9]),  lty=1, lwd=30, col=colorCodesPop[1:9], cex = 1.5, horiz = T,  inset=c(.04,.05))
-    legend("topright", names(colorCodesPop[10:18]),  lty=1, lwd=30, col=colorCodesPop[10:18], cex = 1.5, horiz = T,  inset=c(.04,.10))
-    legend("topright", names(colorCodesPop[19:26]),  lty=1, lwd=30, col=colorCodesPop[19:26], cex = 1.5, horiz = T,  inset=c(.04,.15))
+    title(main=titleText,cex.main = 4, adj=.7)
+#     legend(0.1,.5, names(colorCodes), inset=.1,  lty=1, lwd=30, col=colorCodes, cex = 2)
+    text(.18,.63, "AFR - African", cex=1.5)
+    text(.14,.47, "AMR - Ad Mixed American", cex=1.5)
+    text(.17,.35, "EAS - East Asian", cex=1.5)
+    text(.17,.20, "EUR - European", cex=1.5)
+    text(.16,.05, "SAS - South Asian", cex=1.5)
+    legend("bottomright", names(colorCodesPop[1:7]),  lty=1, lwd=30, col=colorCodesPop[1:7], cex = 1.5, horiz = F,  inset=c(.59,.77), y.intersp=1.1, title="AFR")
+    legend("bottomright", names(colorCodesPop[8:11]),  lty=1, lwd=30, col=colorCodesPop[8:11], cex = 1.5, horiz = F,  inset=c(.45,.77), y.intersp=1.1, title="AMR")
+    legend("bottomright", names(colorCodesPop[12:16]),  lty=1, lwd=30, col=colorCodesPop[12:16], cex = 1.5, horiz = F,  inset=c(.33,.77), y.intersp=1.1, title="EAS")
+    legend("bottomright", names(colorCodesPop[17:21]),  lty=1, lwd=30, col=colorCodesPop[17:21], cex = 1.5, horiz = F,  inset=c(.18,.77), y.intersp=1.1, title="EUR")
+    legend("bottomright", names(colorCodesPop[22:26]),  lty=1, lwd=30, col=colorCodesPop[22:26], cex = 1.5, horiz = F,  inset=c(.04,.77), y.intersp=1.1, title="SAS")
 }
-
 
 ## Usage
 ## Commented so can source from crypticness.R
@@ -93,5 +105,8 @@ dev.off()
 png(paste0("./plots/s_distributions/",outputDir,"/varcovGSM.png"), width = 1400, height = 1200)
 plotHeatmap(varcovMatrix,title="Varcov GSM")
 dev.off()
+
+
+
 # for removing possible related individuals
-related <- which(jm>.1,arr.ind=T)[,1]
+# related <- which(jaccardMatrix>.1,arr.ind=T)[,1]

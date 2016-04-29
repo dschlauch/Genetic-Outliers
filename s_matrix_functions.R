@@ -1,9 +1,35 @@
-calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered1000.gz", numberOfLines=40695, minVariants=5, qcFilter=NULL, ldPrune=1){
+homogeneousSimulations <- function(numSimulatedSamples=200, nVariants=50000, numSimulations=10, cok=.0625, filename="./data/combinedFiltered1000.gz", numberOfLines=-1, minVariants=5, qcFilter=NULL, ldPrune=1){
+#     print("Starting read file")
+#     system.time(genotypes <- fread(paste('zcat',filename), sep=" ", nrows=numberOfLines, header=F))
+#     print("Finished read file")
+#     nVariants <- 10000
+
+    results <- list()
+#     genotypes <- genotypes[, 1:numSimulatedSamples, with=F]
+#     genotypes[,Related := NA ] 
+    for(i in 1:numSimulations){
+        print(i)
+        
+        genotypes <- data.table(matrix(rbinom(numSimulatedSamples*nVariants,1,.1), ncol=numSimulatedSamples))
+        if(is.na(cok)){
+            
+        } else {
+            ibdVariants <- rbinom(nVariants, 1, cok)==1
+            genotypes[[numSimulatedSamples]][ibdVariants] <- genotypes[[1]][ibdVariants]
+    #         genotypes[, Related := relatedSample]
+        }
+        names(genotypes)[1:numSimulatedSamples] <- paste0("Sample",1:numSimulatedSamples)
+        results[[paste0("Simulated",i)]] <- generateSResultsFromGenotypes(paste0("Simulated",i), genotypes, qcFilter, minVariants, ldPrune)
+    }
+    results
+}
+
+calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered1000.gz", numberOfLines=-1, minVariants=5, qcFilter=NULL, ldPrune=1){
     
     print("Starting read file")
     system.time(genotypes <- fread(paste('zcat',filename), sep=" ", nrows=numberOfLines, header=F))
     print("Finished read file")
-    
+
     names(genotypes) <- hap.sampleIDs
     if (subpop=="All"){
         generateSResultsFromGenotypes("Allsamples", genotypes, qcFilter, minVariants, ldPrune)
@@ -77,7 +103,7 @@ generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, qcFilter, min
     print(nrow(genotypesSubpop))
     numFilteredVariants <- nrow(genotypesSubpop)
     sumFilteredVariants <- rowSums(genotypesSubpop)
-    varcovMat <- cov(genotypesSubpop[,c(T,F)] + genotypesSubpop[,c(F,T)])
+    varcovMat <- cov(t(scale(t(genotypesSubpop[,c(T,F)] + genotypesSubpop[,c(F,T)]))))
     
     totalPossiblePairs <- choose(numSamples,2)
     totalPairs <- choose(sumFilteredVariants,2)

@@ -5,7 +5,6 @@
 # outputDir <- "filtered40_LD10"
 
 # Read in results
-results <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
 # results <- lapply(unique(pop), function(pop_i){
 #     
 #     result <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/",pop_i, "_data.rds"))
@@ -37,25 +36,62 @@ results <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/all_da
 
 # Generate Plots ----------------------------------------------------------
 
+results <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
 sapply(names(results), function(pop_i){
     s_vector <- results[[pop_i]]$s_matrix_dip[row(results[[pop_i]]$s_matrix_dip)>col(results[[pop_i]]$s_matrix_dip)] 
     plotFromGSM(subpop=pop_i, gsm=results[[pop_i]]$s_matrix_dip, var_s=var(s_vector), pkweightsMean=results[[pop_i]]$pkweightsMean, "diploid", outputDir=outputDir)
 })
 
-
+# simulated
+simResults <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/Simulated_data.rds"))
+simResults <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/Simulated_data_cok0625.rds"))
+# sapply(names(simResults), function(sim_i){
+#     s_vector <- simResults[[sim_i]]$s_matrix_dip[row(simResults[[sim_i]]$s_matrix_dip)>col(simResults[[sim_i]]$s_matrix_dip)] 
+#     c(sd(s_vector),sqrt(simResults[[sim_i]]$var_s_dip))
+#     #     plotFromGSM(subpop=sim_i, gsm=simResults[[sim_i]]$s_matrix_dip, var_s=var(s_vector), pkweightsMean=simResults[[sim_i]]$pkweightsMean, "diploid", outputDir=outputDir)
+})
 # Calculate structure significance ----------------------------------------
 
-popResults <- as.data.table(t(sapply(names(results), function(pop_i){
-    s_vector <- sort(results[[pop_i]]$s_matrix_dip[row(results[[pop_i]]$s_matrix_dip)>col(results[[pop_i]]$s_matrix_dip)], decreasing=T)
-    topKinship <- (s_vector[1]-1)/(results[[pop_i]]$pkweightsMean-1)
-    btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
-    structureKSTest <- ks.test(scale(s_vector), "pnorm", alternative = c("less"))$p.value
-    crypticSig <- ifelse((s_vector[1]-1)/sd(s_vector) > qnorm(1-.005/choose(length(s_vector),2)), "YES+",
-                                   ifelse((s_vector[1]-1)/sd(s_vector) > qnorm(1-.025/choose(length(s_vector),2)),"YES","NO"))
-    structureSig <- ifelse(structureKSTest<.01, "YES+",ifelse(structureKSTest<.05,"YES","NO"))
-    c(structurePValue=btest$p.value, var_s=results[[pop_i]]$var_s_dip, sampleVariance=var(s_vector), 
-      structureKSTest=structureKSTest, closestRelatives=topKinship, crypticSig=crypticSig, structureSig=structureSig)
-})), keep.rownames=T)
+getPopResults <- function(results){
+    as.data.table(t(sapply(names(results), function(pop_i){
+        s_vector <- sort(results[[pop_i]]$s_matrix_hap[row(results[[pop_i]]$s_matrix_hap)>col(results[[pop_i]]$s_matrix_hap)], decreasing=T)
+        topKinship <- (s_vector[1]-1)/(results[[pop_i]]$pkweightsMean-1)
+        btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
+        structureKSTest <- ks.test((s_vector-1)/sqrt(results[[pop_i]]$var_s_hap), "pnorm", alternative = c("less"))$p.value
+        crypticSig <- ifelse((s_vector[1]-1)/sqrt(results[[pop_i]]$var_s_hap) > qnorm(1-.005/length(s_vector)), "YES+",
+                                       ifelse((s_vector[1]-1)/sqrt(results[[pop_i]]$var_s_hap) > qnorm(1-.025/length(s_vector)),"YES","NO"))
+        structureSig <- ifelse(structureKSTest<.01, "YES+",ifelse(structureKSTest<.05,"YES","NO"))
+        c(structurePValue=btest$p.value, var_s=results[[pop_i]]$var_s_hap, sampleVariance=var(s_vector),
+          structureKSTest=structureKSTest, closestRelatives=topKinship, crypticSig=crypticSig, structureSig=structureSig)
+    })), keep.rownames=T)
+}
+
+popResults <- getPopResults(results)
+simPopResults <- getPopResults(simResults)
+
+hist(as.numeric(simPopResults$structureKSTest))
+# hist(as.numeric(simPopResults$crypticPValue))
+pValues <- sapply(simResults, function(res){
+#     s_vector <- sort(res$s_matrix_hap[row(res$s_matrix_hap)>col(res$s_matrix_hap)], decreasing=T)
+    s_vector <- res$s_matrix_hap[row(res$s_matrix_hap)>col(res$s_matrix_hap)]
+    crypticPValue <- 1-pnorm((s_vector-1)/sqrt(res$var_s_hap))
+    crypticPValue
+})
+
+# unrelated
+pValues <- apply(pValues, 2, sort)
+
+# related
+related <-pValues[199,]
+pValues <- rbind(related, apply(pValues[-199,], 2, sort))
+
+rowMedians <- apply(pValues,1,mean)
+
+pdf("./plots/simulatedQQ.pdf")
+qplot(-log((1:nrow(pValues))/nrow(pValues)),-log(rowMedians)) + geom_abline(intercept=0,slope=1) +
+    ggtitle("QQ plot for simulated homogeneous population, 200 haplotypes, 19900 pairs") + xlab("Expected -log(p)") + ylab("Observed -log(p)") +
+    annotate("text", x = -log(1/nrow(pValues)), y = -log(rowMedians[1]), hjust=1.1, label = "Related Pair, Phi=.0625")
+dev.off()
 
 popResults <- popResults[order(rn)[rank(popGroup$pop)]]
 popResults$super <- popGroup$group
