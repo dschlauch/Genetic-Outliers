@@ -1,6 +1,7 @@
 library(foreach)
 library(doParallel)
-homogeneousSimulations <- function(numSimulatedSamples=200, nVariants=50000, numSimulations=10, cok=.0625, filename="./data/combinedFiltered1000.gz", numberOfLines=-1, minVariants=5, qcFilter=NULL, ldPrune=1, numCores=4, outputDir='.'){
+homogeneousSimulations <- function(numSimulatedSamples=200, nVariants=50000, numSimulations=10, cok=.0625, filename="./data/combinedFiltered1000.gz", 
+                                   numberOfLines=-1, minVariants=5, qcFilter=NULL, ldPrune=1, numCores=4, outputDir='.'){
 #     print("Starting read file")
 #     system.time(genotypes <- fread(paste('zcat',filename), sep=" ", nrows=numberOfLines, header=F))
 #     print("Finished read file")

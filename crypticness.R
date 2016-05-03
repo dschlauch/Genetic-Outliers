@@ -48,7 +48,11 @@ saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data
 
 # Simulated results
 kinshipCoefs <- seq(0,.0625,.0025)
-system.time(results <- homogeneousSimulations(numSimulatedSamples=200, nVariants=10000, cok=NA, numSimulations=100, minVariants=5, outputDir=outputDir))
+sapply(kinshipCoefs, function(cok){
+    system.time(simResults <- homogeneousSimulations(numSimulatedSamples=400, nVariants=100000, cok=NA, numSimulations=10, minVariants=5, outputDir=outputDir))
+    saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/Simulated_",cok,"data.rds"))
+    print(cok)
+})
 saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/Simulated_data.rds"))
 saveRDS(results, paste0("./plots/s_distributions/",outputDir,"/plotdata/Simulated_data_cok0625.rds"))
 

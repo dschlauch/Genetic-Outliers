@@ -36,26 +36,32 @@ simPopResults <- getPopResults(simResults)
 
 hist(as.numeric(simPopResults$structureKSTest))
 # hist(as.numeric(simPopResults$crypticPValue))
-pValues <- sapply(simResults, function(res){
-#     s_vector <- sort(res$s_matrix_hap[row(res$s_matrix_hap)>col(res$s_matrix_hap)], decreasing=T)
-    s_vector <- res$s_matrix_hap[row(res$s_matrix_hap)>col(res$s_matrix_hap)]
-    crypticPValue <- 1-pnorm((s_vector-1)/sqrt(res$var_s_hap))
-    crypticPValue
-})
 
-# unrelated
-pValues <- apply(pValues, 2, sort)
+getPValuesFromSimResults <- function(simResults, diploid=F, relatedPair=NA){
+    s_matrix <- ifelse(diploid, "s_matrix_dip", "s_matrix_hap")
+    var_s <-    ifelse(diploid, "var_s_dip", "var_s_hap")
 
-# related
-related <-pValues[199,]
-pValues <- rbind(related, apply(pValues[-199,], 2, sort))
+    pValues <- sapply(simResults, function(res){
+        s_vector <- res[[s_matrix]][row(res[[s_matrix]])>col(res[[s_matrix]])]
+        crypticPValue <- 1-pnorm((s_vector-1)/sqrt(res[[var_s]]))
+        crypticPValue
+    })
+    if (is.na(relatedPair)){
+        apply(pValues, 2, sort)       
+    } else { 
+        related <-pValues[relatedPair,]
+        pValues <- rbind(related, apply(pValues[-relatedPair,], 2, sort))
+    }
+}
 
-rowMedians <- apply(pValues,1,mean)
+pValues <- getPValuesFromSimResults(simResults, diploid=T)
+
+rowMedians <- apply(pValues,1,median)
 
 pdf("./plots/simulatedQQ.pdf")
-qplot(-log((1:nrow(pValues))/nrow(pValues)),-log(rowMedians)) + geom_abline(intercept=0,slope=1) +
-    ggtitle("QQ plot for simulated homogeneous population, 200 haplotypes, 19900 pairs") + xlab("Expected -log(p)") + ylab("Observed -log(p)") +
-    annotate("text", x = -log(1/nrow(pValues)), y = -log(rowMedians[1]), hjust=1.1, label = "Related Pair, Phi=.0625")
+qplot(-log(1:nrow(pValues)/nrow(pValues)),-log(rowMedians)) + geom_abline(intercept=0,slope=1) +
+    ggtitle("QQ plot for simulated homogeneous population, 200 haplotypes, 19900 pairs") + xlab("Expected -log(p)") + ylab("Observed -log(p)") #+
+#     annotate("text", x = -log(1/nrow(pValues)), y = -log(rowMedians[1]), hjust=1.1, label = "Related Pair, Phi=.0625")
 dev.off()
 
 popResults <- popResults[order(rn)[rank(popGroup$pop)]]
