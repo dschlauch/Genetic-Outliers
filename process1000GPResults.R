@@ -17,49 +17,67 @@ simResults <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/Sim
 })
 # Calculate structure significance ----------------------------------------
 
-getPopResults <- function(results){
+getPopResults <- function(results, var_s="var_s_hap", s_matrix="s_matrix_hap"){
     as.data.table(t(sapply(names(results), function(pop_i){
-        s_vector <- sort(results[[pop_i]]$s_matrix_hap[row(results[[pop_i]]$s_matrix_hap)>col(results[[pop_i]]$s_matrix_hap)], decreasing=T)
+        s_vector <- sort(results[[pop_i]][[s_matrix]][row(results[[pop_i]][[s_matrix]])>col(results[[pop_i]][[s_matrix]])], decreasing=T)
         topKinship <- (s_vector[1]-1)/(results[[pop_i]]$pkweightsMean-1)
         btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
-        structureKSTest <- ks.test((s_vector-1)/sqrt(results[[pop_i]]$var_s_hap), "pnorm", alternative = c("less"))$p.value
-        crypticSig <- ifelse((s_vector[1]-1)/sqrt(results[[pop_i]]$var_s_hap) > qnorm(1-.005/length(s_vector)), "YES+",
-                                       ifelse((s_vector[1]-1)/sqrt(results[[pop_i]]$var_s_hap) > qnorm(1-.025/length(s_vector)),"YES","NO"))
+        structureKSTest <- ks.test((s_vector-1)/sqrt(results[[pop_i]][[var_s]]), "pnorm", alternative = c("less"))$p.value
+        crypticSig <- ifelse((s_vector[1]-1)/sqrt(results[[pop_i]][[var_s]]) > qnorm(1-.005/length(s_vector)), "YES+",
+                                       ifelse((s_vector[1]-1)/sqrt(results[[pop_i]][[var_s]]) > qnorm(1-.025/length(s_vector)),"YES","NO"))
         structureSig <- ifelse(structureKSTest<.01, "YES+",ifelse(structureKSTest<.05,"YES","NO"))
-        c(structurePValue=btest$p.value, var_s=results[[pop_i]]$var_s_hap, sampleVariance=var(s_vector),
+        c(structurePValue=btest$p.value, var_s=results[[pop_i]][[var_s]], sampleVariance=var(s_vector),
           structureKSTest=structureKSTest, closestRelatives=topKinship, crypticSig=crypticSig, structureSig=structureSig)
     })), keep.rownames=T)
 }
 
-popResults <- getPopResults(results)
+popResults <- getPopResults(results, "var_s_dip", "s_matrix_dip")
 simPopResults <- getPopResults(simResults)
 
 hist(as.numeric(simPopResults$structureKSTest))
 # hist(as.numeric(simPopResults$crypticPValue))
 
-getPValuesFromSimResults <- function(simResults, diploid=F, relatedPair=NA){
+getScoresFromSimResults <- function(simResults, diploid=F, relatedPair=NA, method="z-score"){
     s_matrix <- ifelse(diploid, "s_matrix_dip", "s_matrix_hap")
     var_s <-    ifelse(diploid, "var_s_dip", "var_s_hap")
-
-    pValues <- sapply(simResults, function(res){
+    if (method=="z-score"){
+        score <- identity
+    } else if (method=="p-value"){
+        score <- function(x){ 1-pnorm(x)}
+    }else if (method=="neglog-p-value"){
+        score <- function(x){ -log(1-pnorm(x))}
+    }
+    scores <- sapply(simResults, function(res){
         s_vector <- res[[s_matrix]][row(res[[s_matrix]])>col(res[[s_matrix]])]
-        crypticPValue <- 1-pnorm((s_vector-1)/sqrt(res[[var_s]]))
-        crypticPValue
+        crypticPValue <- (s_vector-1)/sqrt(res[[var_s]])
+        score(crypticPValue)
     })
     if (is.na(relatedPair)){
-        apply(pValues, 2, sort)       
+        scores <- apply(scores, 2, sort)       
     } else { 
-        related <-pValues[relatedPair,]
-        pValues <- rbind(related, apply(pValues[-relatedPair,], 2, sort))
+        related <-scores[relatedPair,]
+        scores <- rbind(related, apply(scores[-relatedPair,], 2, sort))
     }
+    scores
 }
 
-pValues <- getPValuesFromSimResults(simResults, diploid=T)
+zScores <- getScoresFromSimResults(simResults, diploid=T, method="z-score")
+pValues <- getScoresFromSimResults(simResults, diploid=T, method="p-value")
 
-rowMedians <- apply(pValues,1,median)
+rowMediansZScores <- apply(zScores,1,median)
+rowMediansPValues <- apply(pValues,1,median)
+
+
+simQQPlot <- qplot(qnorm(1:nrow(zScores)/nrow(zScores)),rowMediansZScores) + geom_abline(intercept=0,slope=1) +
+    ggtitle("QQ plot for simulated homogeneous population, 200 haplotypes, 19900 pairs") + xlab("Expected -log(p)") + ylab("Observed -log(p)") #+
+#     annotate("text", x = -log(1/nrow(pValues)), y = -log(rowMedians[1]), hjust=1.1, label = "Related Pair, Phi=.0625")
 
 pdf("./plots/simulatedQQ.pdf")
-qplot(-log(1:nrow(pValues)/nrow(pValues)),-log(rowMedians)) + geom_abline(intercept=0,slope=1) +
+simQQPlot
+dev.off()
+
+pdf("./plots/simulatedNegLogQQ.pdf")
+qplot(-log(1:nrow(pValues)/nrow(pValues)),-log(rowMediansPValues)) + geom_abline(intercept=0,slope=1) +
     ggtitle("QQ plot for simulated homogeneous population, 200 haplotypes, 19900 pairs") + xlab("Expected -log(p)") + ylab("Observed -log(p)") #+
 #     annotate("text", x = -log(1/nrow(pValues)), y = -log(rowMedians[1]), hjust=1.1, label = "Related Pair, Phi=.0625")
 dev.off()
@@ -78,7 +96,7 @@ popResults$group <- popGroup[popResults$pop,"group"]
 popResults <- popResults[order(group,pop)]
 popResults$pop <- factor(popResults$pop, levels=popResults$pop)
 maxYvalue <- 200
-ggPVals <- ggplot(popResults, aes(y=-log(structureKSTest), x=pop)) +
+ggPVals <- ggplot(popResults, aes(y=-log(as.numeric(structureKSTest)), x=pop)) +
 #     geom_hline(yintercept=-log(.05)) + #geom_text(aes(13,-log(.05),label = "alpha = .05", vjust = -1),parse = T) + 
     geom_hline(yintercept=0) +
     geom_hline(yintercept=-log(.01), linetype='dashed', color="red") + #geom_text(aes(20,-log(.01),size=5,label = "alpha == .01", vjust = -1),parse = T) + 
@@ -88,7 +106,7 @@ ggPVals <- ggplot(popResults, aes(y=-log(structureKSTest), x=pop)) +
         ymax = -log(.01),
         xmin = 27,         # Note: The grobs are positioned outside the plot area
         xmax = 27) +    
-    ggtitle("p-value for structure in each population") + theme_bw() +
+    theme_bw() +
     ylab("-log(p-value)") + xlab("Population") + ggtitle("Structure Detected in 1000 Genomes Populations") +
     guides(color = guide_legend(title = "Super population")) + 
     ylim(0,maxYvalue) +

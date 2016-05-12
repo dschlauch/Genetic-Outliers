@@ -22,7 +22,8 @@ homogeneousSimulations <- function(numSimulatedSamples=200, nVariants=50000, num
     #         genotypes[, Related := relatedSample]
         }
         names(genotypes)[1:numSimulatedSamples] <- paste0("Sample",1:numSimulatedSamples)
-        generateSResultsFromGenotypes(paste0("Simulated",i), genotypes, qcFilter, minVariants, ldPrune, outputDir, saveResult=F)
+        genotypes <- pruneGenotypes(genotypes, ldPrune)
+        generateSResultsFromGenotypes(paste0("Simulated",i), genotypes, minVariants, scaleBySampleAF=T, outputDir, saveResult=F)
     }
     names(results) <- paste0("Simulated",1:numSimulations)
     results
@@ -49,7 +50,7 @@ calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered100
 
     names(genotypes) <- hap.sampleIDs
     if (subpop=="All"){
-        generateSResultsFromGenotypes("Allsamples", genotypes, qcFilter, minVariants, ldPrune)
+        generateSResultsFromGenotypes("Allsamples", genotypes, minVariants, ldPrune)
         stop("Finished running all")
     }
     if(length(subpop)>0){
@@ -63,7 +64,8 @@ calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered100
         }
         hapsampleNames <- hap.sampleIDs[filterhap]
         dipsampleNames <- sampleIDs[filterdip]
-        generateSResultsFromGenotypes(subpop, genotypes[,filterhap, with=F], qcFilter, minVariants, ldPrune, outputDir)
+        genotypes <- pruneGenotypes(genotypes[,filterhap, with=F], ldPrune)
+        generateSResultsFromGenotypes(subpop, genotypes, minVariants, outputDir)
         stop("Finished running combined")
     }
     
@@ -83,7 +85,8 @@ calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered100
             }
             hapsampleNames <- hap.sampleIDs[filterhap]
             dipsampleNames <- sampleIDs[filterdip]
-            results[[subpop]] <- generateSResultsFromGenotypes(subpop, genotypes[,filterhap, with=F], qcFilter, minVariants, ldPrune, outputDir)
+            genotypes <- pruneGenotypes(genotypes[,filterhap, with=F], ldPrune)
+            results[[subpop]] <- generateSResultsFromGenotypes(subpop, genotypes, qcFilter, minVariants, outputDir)
         }
     }
     
@@ -91,7 +94,7 @@ calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered100
     results    
 }
 
-generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, qcFilter, minVariants, ldPrune=1, outputDir=".", saveResult=T){
+pruneGenotypes <-  function(genotypesSubpop, ldPrune=1){
     
     names(genotypesSubpop) <- make.unique(names(genotypesSubpop))
     numSamples <- ncol(genotypesSubpop)
@@ -110,7 +113,29 @@ generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, qcFilter, min
     system.time(runningWhichMax <- running(sumVariants,width=ldPrune,fun=which.max, by=ldPrune))
     prunedIndices <- runningWhichMax + seq(0,ldPrune*(length(runningWhichMax)-1),ldPrune)
     system.time(genotypesSubpop <- genotypesSubpop[prunedIndices])
+    genotypesSubpop
+}
 
+generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, minVariants=5, scaleBySampleAF=F, outputDir=".", saveResult=T, varcov=T){
+    
+#     names(genotypesSubpop) <- make.unique(names(genotypesSubpop))
+    numSamples <- ncol(genotypesSubpop)
+    numVariants <- nrow(genotypesSubpop)
+    sumVariants <- rowSums(genotypesSubpop)
+#     
+#     
+#     # reverse so that MAF<.5
+#     genotypesSubpop[sumVariants>(numSamples/2),] <- 1-genotypesSubpop[sumVariants>(numSamples/2),]
+#     sumVariants <- rowSums(genotypesSubpop)
+#     
+#     # Intelligently LD prune
+#     numblocks <- numVariants/ldPrune +1
+#     blocks <- rep(1:numblocks, each=ldPrune)[1:numVariants]
+#     
+#     system.time(runningWhichMax <- running(sumVariants,width=ldPrune,fun=which.max, by=ldPrune))
+#     prunedIndices <- runningWhichMax + seq(0,ldPrune*(length(runningWhichMax)-1),ldPrune)
+#     system.time(genotypesSubpop <- genotypesSubpop[prunedIndices])
+    
     # remove < n variants
     sumVariants <- rowSums(genotypesSubpop)
     genotypesSubpop <- genotypesSubpop[sumVariants>minVariants,]
@@ -120,8 +145,10 @@ generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, qcFilter, min
     print(nrow(genotypesSubpop))
     numFilteredVariants <- nrow(genotypesSubpop)
     sumFilteredVariants <- rowSums(genotypesSubpop)
-    varcovMat <- cov(t(scale(t(genotypesSubpop[,c(T,F)] + genotypesSubpop[,c(F,T)]))))
-    
+    varcovMat <- NULL
+    if(varcov){
+        varcovMat <- cov(t(scale(t(genotypesSubpop[,c(T,F)] + genotypesSubpop[,c(F,T)]))))
+    }
     totalPossiblePairs <- choose(numSamples,2)
     totalPairs <- choose(sumFilteredVariants,2)
     weights <- totalPossiblePairs/totalPairs
@@ -142,6 +169,11 @@ generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, qcFilter, min
     s_matrix_numerator <- t(genotypesSubpop*weights)%*%genotypesSubpop
     s_matrix_denominator <- numFilteredVariants
     s_matrix_hap <- s_matrix_numerator/s_matrix_denominator
+    if (scaleBySampleAF){
+        numAllelesPerSample <- colSums(genotypesSubpop)
+        relativeAF <- sqrt(mean(numAllelesPerSample)/numAllelesPerSample)
+#         s_matrix_hap <- s_matrix_hap*tcrossprod(relativeAF)
+    }
     colnames(s_matrix_hap) <- colnames(genotypesSubpop)
     rownames(s_matrix_hap) <- colnames(genotypesSubpop)
     
