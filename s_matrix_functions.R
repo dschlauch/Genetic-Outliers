@@ -242,3 +242,47 @@ plotFromGSM <- function(subpop, gsm, var_s, pkweightsMean, plotname="", outputDi
     dev.off()
     
 }
+
+getPopResults <- function(results, var_s="var_s_hap", s_matrix="s_matrix_hap", varianceMethod="scale"){
+    dt <- as.data.table(t(sapply(names(results), function(pop_i){
+        s_vector <- sort(results[[pop_i]][[s_matrix]][row(results[[pop_i]][[s_matrix]])>col(results[[pop_i]][[s_matrix]])], decreasing=T)
+        topKinship <- (s_vector[1]-1)/(results[[pop_i]]$pkweightsMean-1)
+        btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less") 
+        if(varianceMethod=="scale"){
+            sdCalc <-  sd(s_vector)
+        } else {
+            sdCalc <-  sqrt(results[[pop_i]][[var_s]])         
+        }
+        structureKSTest <- ks.test((s_vector-1)/sdCalc, "pnorm", alternative = c("less"))$p.value
+        crypticSig <- ifelse((s_vector[1]-1)/sdCalc > qnorm(1-.005/length(s_vector)), "YES+",
+                             ifelse((s_vector[1]-1)/sdCalc > qnorm(1-.025/length(s_vector)),"YES","NO"))
+        structureSig <- ifelse(structureKSTest<.01, "YES+",ifelse(structureKSTest<.05,"YES","NO"))
+        c(structurePValue=btest$p.value, var_s=results[[pop_i]][[var_s]], sampleVariance=var(s_vector),
+          structureKSTest=structureKSTest, closestRelatives=topKinship, crypticSig=crypticSig, structureSig=structureSig)
+    })), keep.rownames=T)
+    dt
+}
+
+getScoresFromSimResults <- function(simResults, diploid=F, relatedPair=NA, method="z-score"){
+    s_matrix <- ifelse(diploid, "s_matrix_dip", "s_matrix_hap")
+    var_s <-    ifelse(diploid, "var_s_dip", "var_s_hap")
+    if (method=="z-score"){
+        score <- identity
+    } else if (method=="p-value"){
+        score <- function(x){ 1-pnorm(x)}
+    }else if (method=="neglog-p-value"){
+        score <- function(x){ -log(1-pnorm(x))}
+    }
+    scores <- sapply(simResults, function(res){
+        s_vector <- res[[s_matrix]][row(res[[s_matrix]])>col(res[[s_matrix]])]
+        crypticPValue <- (s_vector-1)/sqrt(res[[var_s]])
+        score(crypticPValue)
+    })
+    if (is.na(relatedPair)){
+        scores <- apply(scores, 2, sort)       
+    } else { 
+        related <-scores[relatedPair,]
+        scores <- rbind(related, apply(scores[-relatedPair,], 2, sort))
+    }
+    scores
+}

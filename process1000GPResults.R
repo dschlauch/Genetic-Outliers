@@ -1,86 +1,17 @@
+source('~/1000GP/s_matrix_functions.R')
+source('~/1000GP/read1000GPsupportFiles.R')
+
+# outputDir <- 'filtered40_LD10'
+# outputDir <- 'filtered40_TGP2261_LD10'
 
 # Generate Plots ----------------------------------------------------------
 
 results <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/all_data.rds"))
-sapply(names(results), function(pop_i){
-    s_vector <- results[[pop_i]]$s_matrix_dip[row(results[[pop_i]]$s_matrix_dip)>col(results[[pop_i]]$s_matrix_dip)] 
-    plotFromGSM(subpop=pop_i, gsm=results[[pop_i]]$s_matrix_dip, var_s=var(s_vector), pkweightsMean=results[[pop_i]]$pkweightsMean, "diploid", outputDir=outputDir)
-})
 
-# simulated
-simResults <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/Simulated_data.rds"))
-simResults <- readRDS(paste0("./plots/s_distributions/",outputDir,"/plotdata/Simulated_data_cok0625.rds"))
-# sapply(names(simResults), function(sim_i){
-#     s_vector <- simResults[[sim_i]]$s_matrix_dip[row(simResults[[sim_i]]$s_matrix_dip)>col(simResults[[sim_i]]$s_matrix_dip)] 
-#     c(sd(s_vector),sqrt(simResults[[sim_i]]$var_s_dip))
-#     #     plotFromGSM(subpop=sim_i, gsm=simResults[[sim_i]]$s_matrix_dip, var_s=var(s_vector), pkweightsMean=simResults[[sim_i]]$pkweightsMean, "diploid", outputDir=outputDir)
-})
 # Calculate structure significance ----------------------------------------
 
-getPopResults <- function(results, var_s="var_s_hap", s_matrix="s_matrix_hap"){
-    as.data.table(t(sapply(names(results), function(pop_i){
-        s_vector <- sort(results[[pop_i]][[s_matrix]][row(results[[pop_i]][[s_matrix]])>col(results[[pop_i]][[s_matrix]])], decreasing=T)
-        topKinship <- (s_vector[1]-1)/(results[[pop_i]]$pkweightsMean-1)
-        btest <- binom.test(sum(s_vector>mean(s_vector)), length(s_vector), alternative="less")
-        structureKSTest <- ks.test((s_vector-1)/sqrt(results[[pop_i]][[var_s]]), "pnorm", alternative = c("less"))$p.value
-        crypticSig <- ifelse((s_vector[1]-1)/sqrt(results[[pop_i]][[var_s]]) > qnorm(1-.005/length(s_vector)), "YES+",
-                                       ifelse((s_vector[1]-1)/sqrt(results[[pop_i]][[var_s]]) > qnorm(1-.025/length(s_vector)),"YES","NO"))
-        structureSig <- ifelse(structureKSTest<.01, "YES+",ifelse(structureKSTest<.05,"YES","NO"))
-        c(structurePValue=btest$p.value, var_s=results[[pop_i]][[var_s]], sampleVariance=var(s_vector),
-          structureKSTest=structureKSTest, closestRelatives=topKinship, crypticSig=crypticSig, structureSig=structureSig)
-    })), keep.rownames=T)
-}
-
 popResults <- getPopResults(results, "var_s_dip", "s_matrix_dip")
-simPopResults <- getPopResults(simResults)
 
-hist(as.numeric(simPopResults$structureKSTest))
-# hist(as.numeric(simPopResults$crypticPValue))
-
-getScoresFromSimResults <- function(simResults, diploid=F, relatedPair=NA, method="z-score"){
-    s_matrix <- ifelse(diploid, "s_matrix_dip", "s_matrix_hap")
-    var_s <-    ifelse(diploid, "var_s_dip", "var_s_hap")
-    if (method=="z-score"){
-        score <- identity
-    } else if (method=="p-value"){
-        score <- function(x){ 1-pnorm(x)}
-    }else if (method=="neglog-p-value"){
-        score <- function(x){ -log(1-pnorm(x))}
-    }
-    scores <- sapply(simResults, function(res){
-        s_vector <- res[[s_matrix]][row(res[[s_matrix]])>col(res[[s_matrix]])]
-        crypticPValue <- (s_vector-1)/sqrt(res[[var_s]])
-        score(crypticPValue)
-    })
-    if (is.na(relatedPair)){
-        scores <- apply(scores, 2, sort)       
-    } else { 
-        related <-scores[relatedPair,]
-        scores <- rbind(related, apply(scores[-relatedPair,], 2, sort))
-    }
-    scores
-}
-
-zScores <- getScoresFromSimResults(simResults, diploid=T, method="z-score")
-pValues <- getScoresFromSimResults(simResults, diploid=T, method="p-value")
-
-rowMediansZScores <- apply(zScores,1,median)
-rowMediansPValues <- apply(pValues,1,median)
-
-
-simQQPlot <- qplot(qnorm(1:nrow(zScores)/nrow(zScores)),rowMediansZScores) + geom_abline(intercept=0,slope=1) +
-    ggtitle("QQ plot for simulated homogeneous population, 200 haplotypes, 19900 pairs") + xlab("Expected -log(p)") + ylab("Observed -log(p)") #+
-#     annotate("text", x = -log(1/nrow(pValues)), y = -log(rowMedians[1]), hjust=1.1, label = "Related Pair, Phi=.0625")
-
-pdf("./plots/simulatedQQ.pdf")
-simQQPlot
-dev.off()
-
-pdf("./plots/simulatedNegLogQQ.pdf")
-qplot(-log(1:nrow(pValues)/nrow(pValues)),-log(rowMediansPValues)) + geom_abline(intercept=0,slope=1) +
-    ggtitle("QQ plot for simulated homogeneous population, 200 haplotypes, 19900 pairs") + xlab("Expected -log(p)") + ylab("Observed -log(p)") #+
-#     annotate("text", x = -log(1/nrow(pValues)), y = -log(rowMedians[1]), hjust=1.1, label = "Related Pair, Phi=.0625")
-dev.off()
 
 popResults <- popResults[order(rn)[rank(popGroup$pop)]]
 popResults$super <- popGroup$group
@@ -89,6 +20,22 @@ write.table(popResults[,c("rn","super", "structureSig", "crypticSig"), with=F],
             paste0("./plots/s_distributions/",outputDir,"/popTable.txt"),quote =F, row.names=F, sep="\t",
             col.names=c("Population","Super Population","Structure","Cryptic Relatedness"))
 
+
+# Get inbreeding values ---------------------------------------------------
+
+# inbredStats <- lapply(results, function(x){
+#     a <- x$s_matrix_hap
+#     b <- diag(a[seq(1,nrow(a),2),seq(2,nrow(a),2)])
+#     names(b) <- colnames(a)[c(T,F)]
+#     b
+# })
+# 
+# numInbred <- lapply(inbredStats, function(x){
+#     sum(1-pnorm(scale(x))<.01)
+# })
+# sort(unlist(inbredStats))
+# hist(unlist(b))
+
 # tidy up and plot structure results --------------------------------------
 
 names(popResults)[1] <- "pop"
@@ -96,6 +43,7 @@ popResults$group <- popGroup[popResults$pop,"group"]
 popResults <- popResults[order(group,pop)]
 popResults$pop <- factor(popResults$pop, levels=popResults$pop)
 maxYvalue <- 200
+
 ggPVals <- ggplot(popResults, aes(y=-log(as.numeric(structureKSTest)), x=pop)) +
 #     geom_hline(yintercept=-log(.05)) + #geom_text(aes(13,-log(.05),label = "alpha = .05", vjust = -1),parse = T) + 
     geom_hline(yintercept=0) +
@@ -107,27 +55,30 @@ ggPVals <- ggplot(popResults, aes(y=-log(as.numeric(structureKSTest)), x=pop)) +
         xmin = 27,         # Note: The grobs are positioned outside the plot area
         xmax = 27) +    
     theme_bw() +
-    ylab("-log(p-value)") + xlab("Population") + ggtitle("Structure Detected in 1000 Genomes Populations") +
+    ylab("-log(p-value)") + xlab("Population") + ggtitle("Population Substructure") +
     guides(color = guide_legend(title = "Super population")) + 
     ylim(0,maxYvalue) +
     geom_point(aes(color=group),size=3) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust=.5, size=14),
+          axis.title = element_text(size=30), plot.title=element_text(size=30))
 gt <- ggplot_gtable(ggplot_build(ggPVals))
 gt$layout$clip[gt$layout$name == "panel"] <- "off"
 
 pdf(paste0("./plots/s_distributions/",outputDir,"/pValueForPop.pdf"), width=8, height=8)
 grid.draw(gt)
 dev.off()
+
+
 # ggplot(subset(popResults,!pop%in%c("PEL","MXL","ASW","PUR")), aes(y=var_s, x=sampleVariance, label=pop))+ geom_point(col="red", size=5) + geom_text(aes(y=var_s, x=sampleVariance))+ geom_abline() +
 #     xlim(0,.005)+ylim(0,.005)
-cor(subset(popResults,!pop%in%c("PEL","MXL","ASW","PUR"))$sampleVariance,subset(popResults,!pop%in%c("PEL","MXL","ASW","PUR"))$var_s)
-varianceRatio <- popResults$sampleVariance/popResults$var_s
+cor(as.numeric(subset(popResults,!pop%in%c("PEL","MXL","ASW","PUR"))$sampleVariance),as.numeric(subset(popResults,!pop%in%c("PEL","MXL","ASW","PUR"))$var_s))
+varianceRatio <- as.numeric(popResults$sampleVariance)/as.numeric(popResults$var_s)
 names(varianceRatio)<-popResults$pop
 cbind(sort(varianceRatio, decreasing = TRUE))
 sum(popResults$structurePValue<.01)
-popResults$structurePValue[popResults$structurePValue<.01]
+popResults$structurePValue[as.numeric(popResults$structureKSTest)<.01]
 popResults <- popResults[order(popResults$structurePValue),]
-structuredPops <- popResults$pop[popResults$structurePValue<.01]
+structuredPops <- popResults$pop[as.numeric(popResults$structureKSTest)<.01]
 
 
 # generate summary table --------------------------------------------------
@@ -167,8 +118,14 @@ ggCoKGazal <- ggplot(resTableAll, aes(CombinedInfered, CoK)) + theme_bw() +
     geom_jitter(aes(color=group), alpha=.5) + scale_x_discrete(limits=c("Unrelated","CO","AV or HS", "FS or PO")) + geom_violin(alpha=.4) +
     xlab("Inferred Relationship (Gazal 2015)") + ylab("Estimated kinship") + ggtitle("Estimated Kinship vs Inferred Relationship (Gazal 2015)") + 
     guides(color = guide_legend(title = "Super population")) +
-    theme(plot.title = element_text(size=20))
+    theme(plot.title = element_text(size=20),
+          axis.text = element_text(size=14),
+          axis.title = element_text(size=20),
+          legend.text = element_text(size=12))
 tiff(paste0("./plots/s_distributions/",outputDir,"/EstimatedCoKvsGazal.tiff"), width=900, height=900)
+print(ggCoKGazal)
+dev.off()
+pdf(paste0("./plots/s_distributions/",outputDir,"/EstimatedCoKvsGazal.pdf"), width=8, height=8)
 print(ggCoKGazal)
 dev.off()
 
@@ -184,3 +141,4 @@ ggCoKGazalUnstructured <- ggplot(subset(resTableAll, !pop%in%structuredPops), ae
 tiff(paste0("./plots/s_distributions/",outputDir,"/EstimatedCoKvsGazalUnstruct.tiff"), width=900, height=900)
 print(ggCoKGazalUnstructured)
 dev.off()
+

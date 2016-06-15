@@ -1,5 +1,8 @@
 
 # incorporating gazal filtering -------------------------------------------
+if(!exists("gazalFilter")){
+    gazalFilter <-NA
+}
 if(gazalFilter=="NA"|is.na(gazalFilter)){
     qcFilter <- NULL
 } else {
