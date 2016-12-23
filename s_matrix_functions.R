@@ -1,5 +1,8 @@
 library(foreach)
 library(doParallel)
+library(tools)
+library(hierfstat)
+
 homogeneousSimulations <- function(numSimulatedSamples=200, nVariants=50000, numSimulations=10, cok=.0625, filename="./data/combinedFiltered1000.gz", 
                                    numberOfLines=-1, minVariants=5, qcFilter=NULL, ldPrune=1, numCores=4, outputDir='.'){
 #     print("Starting read file")
@@ -42,18 +45,27 @@ getPopResults <- function(results){
     })), keep.rownames=T)
 }
 
-calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered1000.gz", numberOfLines=-1, minVariants=5, qcFilter=NULL, ldPrune=1, outputDir='.'){
+calculateSMatrix <- function(subpop="each", 
+                             filename="./data/combinedFiltered1000.gz", 
+                             numberOfLines=-1, 
+                             minVariants=5, 
+                             qcFilter=NULL, 
+                             ldPrune=1, 
+                             computeFST=T,
+                             outputDir='.'){
     
     print("Starting read file")
-    system.time(genotypes <- fread(paste('zcat',filename), sep=" ", nrows=numberOfLines, header=F))
+    freadString <- ifelse(file_ext(filename)=="gz", paste('zcat',filename), filename)
+    system.time(genotypes <- fread(freadString, sep=" ", nrows=numberOfLines, header=F))
     print("Finished read file")
 
     names(genotypes) <- hap.sampleIDs
     if (subpop=="All"){
+        genotypes <- pruneGenotypes(genotypes, ldPrune)
         generateSResultsFromGenotypes("Allsamples", genotypes, minVariants, ldPrune)
         stop("Finished running all")
     }
-    if(length(subpop)>0){
+    if(length(subpop)>1){
         print(subpop)
         if(is.null(qcFilter)){
             filterhap <- hap.pop%in%subpop
@@ -65,11 +77,9 @@ calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered100
         hapsampleNames <- hap.sampleIDs[filterhap]
         dipsampleNames <- sampleIDs[filterdip]
         genotypes <- pruneGenotypes(genotypes[,filterhap, with=F], ldPrune)
-        generateSResultsFromGenotypes(subpop, genotypes, minVariants, outputDir)
-        stop("Finished running combined")
+        return(generateSResultsFromGenotypes(subpop, genotypes, minVariants=minVariants, outputDir=outputDir))
+#         stop("Finished running combined")
     }
-    
-    # lapply runs into memory issues for large datasets, use for loop. *cringe*
     
     results <- list()
     if (subpop=="each"){
@@ -88,9 +98,38 @@ calculateSMatrix <- function(subpop="each", filename="./data/combinedFiltered100
             genotypes <- pruneGenotypes(genotypes[,filterhap, with=F], ldPrune)
             results[[subpop]] <- generateSResultsFromGenotypes(subpop, genotypes, qcFilter, minVariants, outputDir)
         }
+        names(results) <- unique(pop)
+    }
+    if (subpop=="pairwise"){
+        for(continent in unique(group)){
+            pairs <- combn(unique(pop[group==continent]),2)
+            for(i in seq_len(ncol(pairs))){
+                pair <- pairs[,i]
+                print(gc())
+                print(pair)
+                if(is.null(qcFilter)){
+                    filterhap <- hap.pop%in%pair
+                    filterdip <- pop%in%pair 
+                } else {
+                    filterhap <- hap.pop%in%pair & rep(qcFilter,each=2)
+                    filterdip <- pop%in%pair & qcFilter
+                }
+                hapsampleNames <- hap.sampleIDs[filterhap]
+                dipsampleNames <- sampleIDs[filterdip]
+                genotypesSubpop <- pruneGenotypes(genotypes[,filterhap, with=F], ldPrune)
+                
+                
+                results[[paste(pair,collapse="_")]] <- generateSResultsFromGenotypes(subpop=pair, genotypesSubpop=genotypesSubpop, minVariants=minVariants, outputDir=outputDir)
+
+                if(computeFST){
+                    fstData <- as.data.frame(t(as.matrix(as.data.frame(genotypesSubpop)[,c(T,F)] + as.data.frame(genotypesSubpop)[,c(F,T)])))
+                    fstData <- cbind(pop = pop[filterdip], fstData)
+                    results[[paste(pair,collapse="_")]]$FST <- genet.dist(fstData,diploid=F,method="Fst")
+                } 
+            }
+        }
     }
     
-    names(results) <- unique(pop)
     results    
 }
 
@@ -125,8 +164,9 @@ generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, minVariants=5
 #     
 #     
 #     # reverse so that MAF<.5
-#     genotypesSubpop[sumVariants>(numSamples/2),] <- 1-genotypesSubpop[sumVariants>(numSamples/2),]
-#     sumVariants <- rowSums(genotypesSubpop)
+    invertMinorAllele <- sumVariants>(numSamples/2)
+    genotypesSubpop[invertMinorAllele] <- 1-genotypesSubpop[invertMinorAllele]
+    sumVariants <- rowSums(genotypesSubpop)
 #     
 #     # Intelligently LD prune
 #     numblocks <- numVariants/ldPrune +1
@@ -138,7 +178,7 @@ generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, minVariants=5
     
     # remove < n variants
     sumVariants <- rowSums(genotypesSubpop)
-    genotypesSubpop <- genotypesSubpop[sumVariants>minVariants,]
+    genotypesSubpop <- genotypesSubpop[sumVariants>minVariants]
     genotypesSubpop <- as.matrix(genotypesSubpop)
 
     print("Number of used variants")
@@ -147,7 +187,9 @@ generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, minVariants=5
     sumFilteredVariants <- rowSums(genotypesSubpop)
     varcovMat <- NULL
     if(varcov){
-        varcovMat <- cov(t(scale(t(genotypesSubpop[,c(T,F)] + genotypesSubpop[,c(F,T)]))))
+#         varcovMat <- cov(t(scale(t(genotypesSubpop[,c(T,F)] + genotypesSubpop[,c(F,T)]))),use="pairwise.complete.obs")
+#         varcovMat <- cov(genotypesSubpop[,c(T,F)] + genotypesSubpop[,c(F,T)],use="pairwise.complete.obs")
+        varcovMat <- cor(genotypesSubpop[,c(T,F)] + genotypesSubpop[,c(F,T)],use="pairwise.complete.obs")
     }
     totalPossiblePairs <- choose(numSamples,2)
     totalPairs <- choose(sumFilteredVariants,2)
@@ -197,16 +239,20 @@ generateSResultsFromGenotypes <- function(subpop, genotypesSubpop, minVariants=5
     popResult
 
 }
+
 plotFromGSM <- function(subpop, gsm, var_s, pkweightsMean, plotname="", outputDir=".",alphaCutoff=.01){
     print(mean(gsm[row(gsm)!=col(gsm)]))
     print(median(gsm[row(gsm)!=col(gsm)]))
     num_comparisons_dip <- choose(ncol(gsm),2)
     sample_IDs <- rownames(gsm)
+    var_s <- var(gsm[row(gsm)!=col(gsm)])
     bonferroni_cutoff_dip <- qnorm((1-alphaCutoff/2)^(1/num_comparisons_dip), sd=sqrt(var_s)) + 1
     
     topValuesDip <- sort(gsm[row(gsm)>col(gsm)], decreasing=T)
     topValuesKinship <- (topValuesDip-1)/(pkweightsMean-1)
     
+    ks.pvalue <- ks.test((topValuesDip-1)/sd(topValuesDip), "pnorm", alternative = c("less"))$p.value
+    ksString <- ifelse(ks.pvalue<.001,"p<.001",paste0("p=",round(ks.pvalue,3)))
     # Display only those that are above the cutoff and among the top 5
     label_cutoff <- max(bonferroni_cutoff_dip, topValuesDip[1])
  
@@ -217,7 +263,7 @@ plotFromGSM <- function(subpop, gsm, var_s, pkweightsMean, plotname="", outputDi
     xmin <- min(minDip, 1-(maxDip-1)*.5)
     xmax <- maxDip + (maxDip-minDip)*.4
     dipPlot <- ggplot(plotData, aes(values)) + 
-        geom_histogram(color="blue",bins=40,fill=I("blue")) + 
+        geom_histogram(color="blue",binwidth=.008,fill=I("blue")) + 
         ggtitle(paste0(subpop,collapse="_"))  + xlab("Similarity score") + 
 #         scale_x_continuous(expand=c(.4,0))+#
         xlim(xmin, xmax) +
@@ -226,14 +272,14 @@ plotFromGSM <- function(subpop, gsm, var_s, pkweightsMean, plotname="", outputDi
         
         geom_vline(xintercept = bonferroni_cutoff_dip, color="red", linetype="longdash") + 
         geom_vline(data=subset(plotData, (values == maxDip & values>bonferroni_cutoff_dip)),aes(xintercept = values), color="blue", linetype="dotted") + 
-        geom_vline(xintercept = median(gsm[row(gsm)!=col(gsm)]), color="black", linetype=1) + 
+        geom_vline(xintercept = 1, color="darkgrey", linetype=2) + 
         
         geom_text(data=subset(plotData, values >= label_cutoff), aes(values,label=pairs), y=0, angle = 80, hjust=0, size=5) +
         geom_text(data=subset(plotData, (values == maxDip & values>bonferroni_cutoff_dip)), x=maxDip, y=Inf, label=paste0("hat(phi)==", round(topValuesKinship[1],3),"  "),parse = TRUE, color="blue", angle = 0, size = 6, vjust = 2, hjust = 0) +
         
 #         annotate("text", x=bonferroni_cutoff_dip, y=Inf, label=paste0("alpha==",format(alphaCutoff/num_comparisons_dip, digits=1)),parse = TRUE, color="red", angle = 0, size = 6, vjust = 2, hjust = 1) +
 #         annotate("text", x=bonferroni_cutoff_dip, y=Inf, label=paste0("alpha "),parse = TRUE, color="red", angle = 0, size = 6, vjust = 2, hjust = 1.5) +
-        annotate("text", x=median(gsm[row(gsm)!=col(gsm)]), y=Inf, label=paste0("m=",round(median(gsm[row(gsm)!=col(gsm)]),3)," "), color="black", angle = 0, size=6, vjust=1.5, hjust = 1) 
+        annotate("text", x=xmin, y=Inf, label=ksString, color="black", angle = 0, size=6, vjust=1.5, hjust = 0) 
     
     
     

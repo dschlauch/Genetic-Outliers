@@ -72,23 +72,25 @@ varSvector <- unlist(lapply(powerSimulationResult, '[[',4))
 fwalpha <- .05
 bonferroniAlpha <- fwalpha/choose(nSamples,2)
 cutoff <- qnorm(1-bonferroniAlpha, mean=1,sd=sqrt(varSvector))
-simPower <- fwalpha + (1-fwalpha)*pnorm(expectedSvector-cutoff, sd=sqrt(varSvector))
+expectedPower <- fwalpha + (1-fwalpha)*pnorm(expectedSvector-cutoff, sd=sqrt(varSvector))
 
 powerCurve <- combinedSimTable[, mean(crypticSig=="NO"), by=cok ]
-powerCurve$typeIIError <- 1-simPower
+powerCurve$typeIIError <- 1-expectedPower
+powerCurve$expectedPower <- expectedPower
+powerCurve$simPower <- 1-powerCurve$V1
 ggPowerCurve <- ggplot(powerCurve) + 
-    geom_line(aes(x=cok,y=typeIIError, col="Expected")) +
-    geom_point(aes(x=cok,y=V1, col="Simulated"), size=4) +
+    geom_line(aes(x=cok,y=expectedPower, col="Expected")) +
+    geom_point(aes(x=cok,y=simPower, col="Simulated"), size=4) +
     scale_colour_manual(values=c("blue","red")) +
-    geom_hline(yintercept=.95, linetype="dotted") + 
+    geom_hline(yintercept=.05, linetype="dotted") + 
     geom_hline(yintercept=0) +
     geom_vline(xintercept=0) +  
     guides(colour = guide_legend(override.aes = list(shape=c(NA,16),linetype=c(1,0)))) + 
-    ggtitle(expression(paste("Type II error vs ", phi, ", ",alpha[fw]==.05))) + xlab(expression(phi)) + ylab("Type II Error") +
+    ggtitle(expression(paste("Power vs ", phi, ", ",alpha[fw]==.05))) + xlab(expression(phi)) + ylab("Power") +
     theme_bw() +
     theme(plot.title = element_text(size=40), axis.title.x = element_text(size = 30), axis.title.y = element_text(size = 30), 
           axis.text.x=element_text(size=20), axis.text.y=element_text(size=20),
-          legend.title=element_blank(),legend.position=c(0.04, .06),legend.justification=c(0,0), 
+          legend.title=element_blank(),legend.position=c(0.7, .07),legend.justification=c(0,0), 
           legend.key.size = unit(1.5, "cm"), legend.text=element_text(size=20),
           legend.background = element_rect(fill=alpha('white', 0.5)),legend.key = element_rect(colour = NA))
 

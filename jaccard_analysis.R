@@ -41,6 +41,10 @@ V.interval.list[["20-50"]] <- V.list[["50"]]
 
 # Read in the U's and V's that were gathered in an interval
 interval.file.list <- list.files(pattern="output")[!(grepl("_20_",list.files(pattern="output"))|grepl("ass",list.files(pattern="output")))]
+
+# Too much for my poor laptop to handle
+interval.file.list <- interval.file.list[-c(2,10)]
+
 V.list2       <- lapply(file.path(interval.file.list, "all_V.csv"), read.csv, row.names=1)
 U.list2       <- lapply(file.path(interval.file.list, "all_U.csv"), read.csv, row.names=1)
 V.list2       <- lapply(V.list2, as.matrix)
@@ -87,7 +91,8 @@ jaccard.cumulative.list <- list()
 jaccard.interval.list <- list()
 
 # Must be run in for loop (Do not change to apply)
-for (i in names(U.interval.list)){
+for (i in names(U.interval.list)[-1:-2]){
+    print(i)
     U_tmp <- U_tmp + U.interval.list[[i]]
     V_tmp <- V_tmp + V.interval.list[[i]]
     jaccard.cumulative.list[[i]] <- combinedJaccard(V_tmp/U_tmp) 
@@ -162,10 +167,13 @@ interval_percent <- paste(as.numeric(ggData$minAC)/50,"%-", as.numeric(ggData$ma
 ggData$interval_percent <- factor(interval_percent, levels=unique(interval_percent))
 
 plotPopComparison <- function(comparison, data){
-    ggplot(data=subset(ggData,grepl(comparison, data$pop)), aes(x=interval_percent, y=ratio, group=cumulative, colour=cumulative)) +
-        geom_line() + geom_point() + ggtitle(paste("Jaccard Ratio vs. MAF for ", comparison,sep="")) + 
+    ggplot(data=subset(ggData,grepl(comparison, data$pop)&data$cumulative=="interval"), aes(x=interval_percent, y=ratio, group=1)) +
+        geom_line(colour="red") + 
+        geom_point(colour="red")  +
+        ggtitle(paste("Jaccard Ratio vs. MAF interval for ", comparison,sep="")) + 
         xlab("MAF interval")+ 
-        ylab("Jaccard ratio: (Mean Within)/(Mean Between)")
+        ylab("Jaccard ratio: (Mean Within)/(Mean Between)") +
+        theme_bw() + guides(colour=guide_legend(title="") )
 }
 
 png("./plots/ITUvsSTU_JaccardRatio.png", width=800)
@@ -181,9 +189,10 @@ dev.off()
 #Color population vs YRI
 png("./plots/YRIvsAll_pop_color_interval.png", width=800)
 ggplot(data=subset(ggData,grepl("YRI",ggData$pop)&grepl("interval",ggData$cumulative)), aes(x=interval_percent, y=ratio, group=pop, colour=pop)) +
-    geom_line() + geom_point() + ggtitle("Jaccard Ratio vs. MAF for YRI (Interval)") + 
+    geom_line() + geom_point() + ggtitle("Jaccard Ratio vs. MAF Interval for YRI vs X") + 
     xlab("MAF interval")+ 
-    ylab("Jaccard ratio: (Mean Within)/(Mean Between)")
+    ylab("Jaccard ratio: (Mean Within)/(Mean Between)") +
+    theme_bw() + guides(colour=guide_legend(title="Comparison") )
 dev.off()
 
 #Color continent vs YRI
@@ -202,6 +211,14 @@ ggplot(data=subset(ggData,grepl("YRI",ggData$pop)&grepl("cumulative",ggData$cumu
     ylab("Jaccard ratio: (Mean Within)/(Mean Between)")
 dev.off()
 
+#Color continent vs YRI (interval)
+png("./plots/YRIvsAll_continent_color_interval.png", width=1000)
+ggplot(data=subset(ggData,grepl("YRI",ggData$pop)&grepl("interval",ggData$cumulative)), aes(x=interval_percent, y=ratio, group=pop, colour=super1)) +
+    geom_line() + geom_point() + ggtitle("Jaccard Index vs. MAF Interval for YRI vs X") + 
+    xlab("MAF interval")+ 
+    ylab("Jaccard ratio: (Mean Within)/(Mean Between)")+
+    theme_bw() + guides(colour=guide_legend(title="Continent of X") )
+dev.off()
 # k-medroid clustering
 
 png("./plots/IBSvsTSI_clustering_efficiency.png", width=800)

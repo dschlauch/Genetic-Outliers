@@ -94,6 +94,8 @@ resTableAll <- data.table(do.call(rbind, lapply(unique(pop),function(pop_i){
     colnames(resTable) <- c("SampleID_1","SampleID_2","s","CoK","pop")
     resTable
 })))
+maxRelated <- resTableAll[,max(CoK), by=pop]
+maxRelated <- maxRelated[order(V1)]
 
 gazal_related_rev <- copy(gazal_related_orig)
 setcolorder(gazal_related_rev, c(2,1,3,4,5))
