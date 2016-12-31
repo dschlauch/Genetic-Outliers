@@ -28,8 +28,8 @@ stego <- function(genotypesSubpop){
 numSamples <- seq(100,3600,100)
 replicateIndex <- 32
 numVariants <- 100000
-timed_methods <- c(princomp, prcomp, stego)
-method_names <- c("PCA","prcomp","STEGO")
+timed_methods <- c(cor,princomp, prcomp, stego)
+method_names <- c("cor","PCA","prcomp","STEGO")
 
 sapply(numSamples, function(x){
     genotypes <- matrix(rbinom(x*numVariants,1,.2), ncol=x)
