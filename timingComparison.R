@@ -1,6 +1,10 @@
 library(data.table)
 
-speedTest <- function(genotypesSubpop){
+##  A version of stego with all the pre-processing, data 
+##  validation, post-analysis statistical tests steps removed. 
+##  Additionally added the eigen 
+##  step for comparison with princomp().
+stego <- function(genotypesSubpop){
     numSamples <- ncol(genotypesSubpop)
     genotypesSubpop <- as.matrix(genotypesSubpop)
     
@@ -18,13 +22,14 @@ speedTest <- function(genotypesSubpop){
     s_matrix_numerator <- t(genotypesSubpop*weights)%*%genotypesSubpop
     s_matrix_denominator <- numFilteredVariants
     s_matrix_hap <- s_matrix_numerator/s_matrix_denominator
+    eigen(s_matrix_hap)
 }
 
-numSamples <- seq(500,3000,100)
-replicateIndex <- 2
+numSamples <- seq(100,3600,100)
+replicateIndex <- 32
 numVariants <- 100000
-timed_methods <- c(speedTest, princomp, cor)
-method_names <- c("stego", "princomp")
+timed_methods <- c(princomp, prcomp, stego)
+method_names <- c("PCA","prcomp","STEGO")
 
 sapply(numSamples, function(x){
     genotypes <- matrix(rbinom(x*numVariants,1,.2), ncol=x)
@@ -36,22 +41,38 @@ sapply(numSamples, function(x){
 })
 
 
-# # 1 time use
-# apply(times[replicateIndex==1],1,function(x){
-#     saveRDS(x[c(3,4,5,6,7,2,8,9)], paste0("./timing/",x[1]))
-#     }
-# )
+# # # 1 time use
+# apply(times,1,function(x){
+#     saveRDS(x[2:9], paste0("./timing/",x[1]))
+# })
 
 
+library(ggplot2)
+library(data.table)
+# Plot all the times
 times <- as.data.table(t(sapply(list.files("./timing/"), function(x) readRDS(paste0("./timing/",x)))),keep.rownames=TRUE)
 times$elapsed <- as.numeric(times$elapsed)
 times$nsamp <- as.numeric(times$nsamp)
+times$replicateIndex <- as.numeric(times$replicateIndex)
 
-# collapse the times
-times[,lapply(.SD, mean),by=c(method, nsamp)]
-
-library(ggplot2)
+times <- times[nsamp!=3700]
+# times <- times[replicateIndex>=20]
+times <- times[method!="STEGO_FULL"]
 
 pdf("timing_comparison.pdf")
-ggplot(times[replicateIndex==1]) + geom_point(aes(x=nsamp/2, y=elapsed, col=method)) + theme_bw() + xlab("Number of Samples") +ylab("Timing (seconds)")
+ggplot(times) + geom_point(aes(x=nsamp/2, y=elapsed, col=method), alpha=.5) + theme_bw() + xlab("Number of Samples") +ylab("Timing (seconds)")
+dev.off()
+
+# collapse the time replicates
+average_times <- times[, mean(elapsed),by=.(method,nsamp)]
+names(average_times)[3] <- "elapsed"
+
+pdf("average_timing_comparison.pdf")
+print(ggplot(average_times) + geom_point(aes(x=nsamp/2, y=elapsed, col=method)) + 
+    theme_bw() + xlab("Number of Samples") +ylab("Average Timing (seconds)") +
+    ggtitle("Computation time for 100k variants vs X samples in R") + 
+    theme(plot.title = element_text(hjust = 0.5))+ 
+    scale_colour_discrete(name="Method",
+                          breaks=c("cor", "PCA", "prcomp","STEGO"),
+                          labels=c("cor()", "princomp()", "prcomp()","stego()")))
 dev.off()
